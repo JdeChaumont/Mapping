@@ -1,0 +1,2037 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<link href="./css/bootstrap.min.css" rel="stylesheet" type="text/css">
+<link href="../lib/leaflet/leaflet.css" rel="stylesheet" type="text/css">
+<style>
+
+.background {
+  fill : none;
+  pointer-events: all;
+}
+
+.county {
+  fill: #ccc;
+  fill-opacity: 1.0;
+}
+
+.county .active {
+  fill: orange;
+  fill-opacity: 1.0;
+}
+
+.county-border {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.0px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.county-label {
+  fill: #000;
+  fill-opacity: 1.0;
+  font-size: 9px;
+  font-weight: 500;
+  text-anchor: middle;
+}
+
+.county.highlight {
+  fill: orange;
+  fill-opacity: 1.0;
+}
+
+.subunit {
+  fill: #999;
+  fill-opacity: 0.4;
+}
+
+.subunit.highlight {
+  fill: orange;
+  fill-opacity: 0.4;
+}
+
+.subunit-border {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.0px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+text {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+/* ************ ZIP INFO WINDOW ************ from Trulia*/
+
+#tip {
+  display: none;
+  pointer-events: none;
+  position: absolute;
+  background: url('./black85.png');
+  -moz-border-radius: 5px;
+  border-radius: 5px;
+  padding: 10px 20px 10px 7px;
+  color: white;
+  z-index: 20;
+  width: 250px;
+}
+
+#tip .zip {
+  margin-left: 12px;
+  font-size: 30px;
+  line-height: 32px;
+}
+
+#tip .hoods {
+  margin-bottom: 15px;
+  font-style: italic;
+  margin-left: 12px;
+}
+
+#tip table {
+  width: 100%;
+}
+
+#tip th {
+  text-align: left;
+}
+
+#tip td {
+  text-align: right;
+}
+
+#tip th, #tip td {
+  border-top: 1px solid #666;
+  padding: 3px 0 12px 0;
+}
+
+#tip tr .descr {
+  color: #aaa;
+  display: block;
+  font-size: 12px;
+  line-height: 14px;
+  margin-left: 12px;
+}
+
+#tip tr.ineq .descr {
+  margin-left: 0;
+}
+
+#tip tr.ineq {
+  font-size: 18px;
+  line-height: 20px;
+}
+
+#tip tr.ineq th {
+  padding-left: 12px;
+}
+
+#tip table .circle {
+  float: left;
+  width: 8px;
+  height: 8px;
+  margin: 3px 5px 0 0;
+  -moz-border-radius: 100px;
+  border-radius: 100px;
+  background: white;
+  aborder: 1px solid white;
+}
+
+#tip table tr.high .circle {
+  background: red;
+}
+
+#tip table tr.mid .circle {
+  background: orange;
+}
+
+#tip table tr.low .circle {
+  background: green;
+}
+
+#mapContainer {
+
+}
+
+#map, #mapCurtain,
+#regionalMap {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding: 0;
+    border :0;
+}
+
+#mapCurtain {
+    background: white;
+    z-index: 5;
+}
+
+.off {
+    display: none;
+}
+
+#regionalMap {
+    z-index: 10;
+}
+
+
+#tip_ppr {
+  display: none;
+  pointer-events: none;
+  position: absolute;
+  background: url('./black85.png');
+  -moz-border-radius: 5px;
+  border-radius: 5px;
+  padding: 10px 20px 10px 7px;
+  color: white;
+  z-index: 30;
+  width: 300px;
+}
+
+.ppr {
+  fill: steelblue;
+}
+.ppr.highlight {
+  fill: black;
+}
+
+/* Grid related */
+	.cell{
+		/*font-weight: italic;*/
+		font-size: 11pt;
+		text-align : right;
+	}
+
+	.table tbody>tr>td {
+		padding: 4px;
+	}
+
+	.h4 {
+		font-weight: italic;
+		font-size: 14pt;
+	}
+
+	.header {
+		font-weight: italic;
+		font-size: 14pt;
+		text-align : center;
+	}
+
+</style>
+<body>
+    <div class="row-fluid col-sm-12" style="padding:0">
+      <div class="row-fluid col-sm-6" style="padding:0">
+        <div class="col-sm-12" id="map" style="width:650px;height:890.5px"></div>
+        <div class="col-sm-12" id="mapCurtain" style="width:650px;height:890.5px"></div>
+        <div class="col-sm-12" id="regionalMap" style="width:650px;height:890.5px"></div>
+      </div>
+      <div class="row-fluid col-sm-6" style="padding:0">
+        <button id="mapReset" class="btn btn-default">Reset map</button>
+        <button id="mapBack" class="btn btn-default">Back</button>
+		<div id="rpt1" class="inActiveTab">
+			<div class="rptBody indent" id="rptArrears"></div>
+		</div>
+      </div>
+    </div>
+    <div id="tip">
+      <p class="zip"></p>
+      <p class="hoods"></p>
+      <table>
+        <tbody>
+          <tr class="ineq">
+            <th>
+              <div class="title">Total</div>
+              <div class="descr">Total properties in area</div>
+            </th>
+            <td class="val"></td>
+          </tr>
+          <tr class="high">
+            <th>
+              <div class="title"><span class="circle high"></span>Unoccupied</div>
+              <div class="descr">Unoccupied properties</div>
+            </th>
+            <td class="val"></td>
+          </tr>
+          <tr class="mid">
+            <th>
+              <div class="title"><span class="circle mid"></span>Vacant</div>
+              <div class="descr">Vacant properties</div>
+            </th>
+            <td class="val"></td>
+          </tr>
+          <tr class="low">
+            <th>
+              <div class="title"><span class="circle low"></span>Vacancy rate</div>
+              <div class="descr">Vacancy rate in area</div>
+            </th>
+            <td class="val"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="tip_ppr">
+      <p class="addr"></p>
+      <p class="hoods"></p>
+      <table>
+        <tbody>
+          <tr class="date">
+            <th>
+              <div class="title">Sold</div>
+            </th>
+            <td class="val"></td>
+          </tr>
+          <tr class="price">
+            <th>
+              <div class="title"><span class="circle price"></span>Price</div>
+            </th>
+            <td class="val"></td>
+          </tr>
+          <tr class="fmp">
+            <th>
+              <div class="title"><span class="circle fmp"></span>Full Market Price</div>
+            </th>
+            <td class="val"></td>
+          </tr>
+          <tr class="vatex">
+            <th>
+              <div class="title"><span class="circle vatex"></span>Vat Exclusive</div>
+            </th>
+            <td class="val"></td>
+          </tr>
+          <tr class="type">
+            <th>
+              <div class="title"><span class="circle type"></span>Type</div>
+            </th>
+            <td class="val"></td>
+          </tr>
+          <tr class="proptype">
+            <th>
+              <div class="title"><span class="circle proptype"></span>Property type</div>
+            </th>
+            <td class="val"></td>
+          </tr>
+          <tr class="beds">
+            <th>
+              <div class="title"><span class="circle beds"></span>Bedrooms</div>
+            </th>
+            <td class="val"></td>
+          </tr>
+          <tr class="baths">
+            <th>
+              <div class="title"><span class="circle baths"></span>Bathrooms</div>
+            </th>
+            <td class="val"></td>
+          </tr>
+          <tr class="id">
+            <th>
+              <div class="title"><span class="circle id"></span>id</div>
+            </th>
+            <td class="val"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+<script src="../lib/base64compress/jsxcompressor.min.js"></script>
+<script src="../lib/d3/d3.v3.min.js"></script>
+<!--<script src="../lib/d3/d3.v3.dsvEdit.js"></script>!-->
+<script src="../lib/d3/topojson.v1.min.js"></script>
+<script src="../lib/d3/d3.hexbin.v0.min.js"></script>
+<script src="../lib/jquery/jquery-1.10.2.js"></script>
+<script src="../lib/jquery/jquery.uriAnchor.js"></script>
+
+<script src="./jdc/jdcUtils.js"></script>
+<script src="./jdc/jdcState.js"></script>
+<script src="./jdc/jdcGrid.js"></script>
+<script src="./jdc/jdcDataProvider_PPR.js"></script>
+
+<script src="./census/mapAdminCounties.json"></script>
+<script src="./census/mapElectoralDistrictsbyCounty.json"></script>
+<script src="./census/mapSmallAreasByED.json"></script>
+<script src="./census/maps_Admin_Cty.js"></script>
+<script src="./census/maps_ED.js"></script>
+<script src="./census/maps_SA.js"></script>
+<script src="./census/census_Data_Cty_ED_SA.js"></script>
+<script src="../lib/leaflet/leaflet.js"></script>
+<script src="../lib/polymaps/polymaps.js"></script>
+
+
+<script>
+  function fireEvent(name, target) {
+    //Ready: create a generic event
+    var evt = document.createEvent("Events")
+    //Aim: initialize it to be the event we want
+    evt.initEvent(name, true, true); //true for can bubble, true for cancelable
+    //FIRE!
+    target.dispatchEvent(evt);
+  }
+  function foobar(e){
+      console.log("foobar called");
+      console.log(this);
+  }
+
+  function testEvents() {
+      window.addEventListener("doubleClick", foobar, false); //false to get it in bubble not capture.
+  }
+
+  function singleClick(e) {
+      fireEvent("singleClick", document);
+      console.log("singleClick fired");
+      console.log(this);
+  }
+
+  function doubleClick(e) {
+      fireEvent("doubleClick", document);
+      console.log("doubleClick fired");
+      console.log(this);
+  }
+
+  function s(e){
+    console.log("single fired");
+    clicked.call(this,e);
+  }
+
+  function d(e){
+    console.log("double fired");
+    doubleClicked.call(this,e);
+  }
+
+  //This works
+  function clickParse(single,double){
+    return function(e){
+      var that = this;
+      var dblclick = parseInt($(that).data('double'), 10) || 0;
+      $(that).data('double', ++dblclick);
+      if(dblclick>1){
+        double.call(that,e);
+      } else {
+          setTimeout(function() {
+            if (parseInt( $(that).data('double'), 10) < 2) {
+                single.call(that,e);
+            }
+            $(that).data('double', 0);
+          }, 300);
+      }
+    }
+  }
+
+  /*
+  document.body.onclick = function (e) {
+      var isRightMB;
+      e = e || window.event;
+
+      if ("which" in e)  // Gecko (Firefox), WebKit (Safari/Chrome) & Opera
+          isRightMB = e.which == 3;
+      else if ("button" in e)  // IE, Opera
+          isRightMB = e.button == 2;
+
+      alert("Right mouse button " + (isRightMB ? "was not " : "") + "clicked!");
+  } */
+
+</script>
+<script>
+    //var NW = map.projection.invert([325,881/2]);
+    //console.log(NW);
+    var mp={};
+    //mp.centre=[NW[1], NW[0]];
+    mp.centre=[53.3, -8.2];
+    mp.zoom=7;
+    //mp.centre=[53.9, -6.3];
+    //mp.zoom=11;
+
+    //var map = L.map('map').setView([51.505, -0.09], 13);
+    var mapL = L.map('map').setView(mp.centre, mp.zoom);
+
+    L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
+      maxZoom: 19//,
+      //attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="http://cloudmade.com">CloudMade</a>'
+    }).addTo(mapL);
+
+    // Use Leaflet to implement a D3 geometric transformation.
+    function projectPoint(x, y) {
+      //var point = mapL.latLngToLayerPoint(new L.LatLng(y, x));
+      var point = latLngToPoint(new L.LatLng(y, x));
+      this.stream.point(point.x, point.y);
+    }
+
+    function latLngToPoint(latlng) {
+      return mapL.project(latlng)._subtract(mapL.getPixelOrigin());
+    };
+
+</script>
+
+<script>
+
+
+  //*******************************************************************************
+  // Create User Interface
+  //*******************************************************************************
+  //var anchor = anchorManager(); //then attach handler
+  //var state = stateManager(anchor,dataArray); //should data be set here
+
+
+
+
+
+  //*******************************************************************************
+  //Module Template - not used just a template
+  //*******************************************************************************
+  function moduleTemplate(o){
+    var ret = {};
+
+    var defaults = {
+
+    }
+
+    ret.init = function(options){
+
+        // Extend defaults
+        var extended = defaults;
+        for (var prop in options) {
+          if (options.hasOwnProperty(prop)) {
+            extended[prop] = options[prop];
+          }
+        }
+        var o = ret.options = extended; //var o used for shorthand
+
+      return ret;
+    }
+
+    ret.update = function(){
+
+    }
+
+    return ret.init(o);
+  }
+
+  //*******************************************************************************
+  //Module Template - not used just a template
+  //*******************************************************************************
+  function regionalMap(o){
+    var ret = {};
+    var o;
+    var centered = null;
+    var x,y,centroid,l;
+    var path,svg,g,tooltip,transform,saleTooltip,gMap,ppr;
+    var currentLevel = 0, maxLevel = 0;
+    var k = 1; //zoom level
+    var mapCache = {};
+
+    var defaults = {
+      margin : 0,
+      width : 100,
+      height : 137, //factor for shape of Ireland
+      scale : 1200*(137/85.33)*1,//1200*(137/85.33)*1,
+      projection : d3.geo.albers,
+      center : [-3.8, 53.3],
+      rotate : [4.4, 0],
+      parallels : [52, 56]
+    }
+
+    function mapStateHistory(){
+        var s = {};
+        var history = [];
+        s.save = function(){
+            history.push({ "k": k, "x" : x, "y" : y, "l" : currentLevel});
+        };
+        s.back = function(){
+            var r = s.last();
+            k = r["k"];
+            x = r["x"];
+            y = r["y"];
+            currentLevel = r["l"];
+            history.pop();
+        }
+        s.last = function(){
+            return history[history.length-1];
+        }
+        s.clear = function(){
+            history = [];
+        }
+        //initialise
+        return s;
+    }
+
+    ret.init = function(options){
+
+        // Extend defaults
+        var extended = defaults;
+        for (var prop in options) {
+          if (options.hasOwnProperty(prop)) {
+            extended[prop] = options[prop];
+          }
+        }
+        o = ret.options = extended; //var o used for shorthand
+
+        o.width = d3.select("#"+o.container)[0][0].clientWidth-o.margin;
+        o.height = o.width * 1.37;
+        o.scale =  700*(o.height/85.33)*1;//(1 << 8 + 7) / 2 / Math.PI;
+        maxLevel = o.level.length-1;
+        /*ret.projection = o.projection()
+          .center(o.center)
+          .rotate(o.rotate)
+          .parallels(o.parallels)
+          .scale(o.scale)
+          .translate([o.width / 2, o.height / 2]); */
+        ret.projection = d3.geo.mercator()
+          .center(o.center)
+          .scale(o.scale)
+          .rotate(o.rotate)
+          .translate([o.width / 2, o.height / 2]);
+
+        //From http://stackoverflow.com/questions/21859953/matching-leaflet-zoom-level-with-d3-geo-scale
+        //Shows how to derive scale for projection
+        /*Map.projection = d3.geo.mercator()
+          .center([Map.center[1], Map.center[0]])
+          .scale((1 << 8 + Map.zoom) / 2 / Math.PI) //determine nearest zoom level and use this
+          .translate([Map.width / 2, Map.height / 2])
+        function transform(d) {
+          d = Map.projection(d.value.geometry.coordinates[0], d.value.geometry.coordinates[1]);
+          return "translate(" + d[0] + "," + d[1] + ")";
+        }
+        object.attr("transform", transform);*/
+
+        //tooltip=initTooltip();
+        tooltip=d3.select("#tip");
+        pprTooltip=d3.select("#tip_ppr");
+        draw();
+
+        //setTimeout(hex,10000);
+        ret.o = o;
+        ret.history = mapStateHistory();
+        //ret.level = function(){ return currentLevel;}
+
+      return ret;
+    }
+
+    function getMap(level,selector){
+      return mapCache[selector] || fillMapCache(level,selector);
+    }
+
+    function fillMapCache(level,selector){
+      var p,b,f;
+      var l = lvl(level);
+      var t = l.source;
+      if(l.sourceFormat==="geojson"){
+        p = t[selector] || t;
+        b = p;
+      } else {
+        f = t["objects"][selector] || t["objects"];
+        p = topojson.feature(t, f).features;
+        b = topojson.mesh(t, f, function(a, b) { return a !== b; });
+      }
+      //Add properties
+      for(var i=0;i<p.length;i++){
+        p[i]["properties"]=census2011Data[p[i]["id"]];
+      }
+      mapCache[selector] = {"paths" : p, "borders" : b}
+      return (mapCache[selector]);
+    }
+
+    function initTooltip(){
+      return d3.select("body")
+          .append("div")
+          .attr("id","tip")
+          .style("position","absolute")
+          .style("z-index","10")
+          .style("visibility","visible")
+          .text("to be defined");
+    }
+
+    function draw(){
+
+      var l = o.level[0]; //draw from first level of map
+
+      //new approach linked to leaflet map
+      //transform = d3.geo.transform({point: projectPoint});
+      //path = d3.geo.path().projection(transform);
+
+      path = d3.geo.path()
+          .projection(ret.projection)
+          .pointRadius(2);
+
+      svg = d3.select("#" + o.container).append("svg")
+          .attr("width", o.width)
+          .attr("height", o.height);
+
+      svg.append("rect")
+          .attr("class","background")
+          .attr("width", o.width)
+          .attr("height", o.height)
+          .on("click",clicked);
+
+      g = svg.append("g");
+
+      gMap = g.append("g");
+
+        ppr = g.append("g") //appending to g as translation already performed here //could make properties global
+            .attr("class", "ppr_sales");
+
+      //Level specific
+      drawLevel(0,"IE");
+    }
+
+    function hex(){
+
+      var points = dataPPR.map(function(e,i){return ret.projection([e.Location.Geo.Lng,e.Location.Geo.Lat]) });
+
+      var color = d3.scale.linear()
+          .domain([0, 20])
+          .range(["white", "steelblue"])
+          .interpolate(d3.interpolateLab);
+
+      var hexbin = d3.hexbin()
+          .size([o.width, o.height])
+          .radius(14);
+
+      var opacity = d3.scale.linear()
+          .domain([0, 1000])
+          .range([0, 1])
+          .interpolate(d3.interpolateNumber);
+
+      /*var hexsvg = d3.select("body").append("svg")
+          .attr("width", o.width)
+          .attr("height", o.height);*/
+
+      var hexagon = svg.append("g")
+          .attr("class", "hexagons")
+        .selectAll("path")
+          .data(hexbin(points))
+        .enter().append("path")
+          .attr("d", hexbin.hexagon(14))
+          .attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; })
+          //.style("fill-opacity", function(d) { return 0.5; })
+          .style("fill", function(d) { return color(d.length); });
+          //.style("fill-opacity", function(d) { return opacity(d.length); })
+          //.style("fill", function(d) { return "black"; });
+    }
+
+
+    var radius = d3.scale.pow().exponent(0.75)
+                      .domain([0,2e6])
+                      .range([3,15]);
+
+    function rescalePropertySales(){
+        g.selectAll(".ppr") //could access properties
+          .attr("r", function(d){return radius(Math.min(d.Price,5e6))/k})
+          //.attr("r", function(d){return d.radius/k})
+          .style("stroke-width", 0.5/k);
+    }
+
+    function plotPoints(id,scale){
+
+      //get points for electoral district
+      var points = pxf.getPopulation({"Location.ED":id}).value.sort(function(a,b){return b.Price-a.Price;}),
+        i = -1,
+        n = points.length, p, c, u, uniqueCoords = {}, u, r, s = [[0,1],[0,-1],[1,0],[-1,0],[1,1],[-1,-1],[-1,1],[1,-1]]; //uC = unique Coordinates - make global?
+        var data = points;
+        while (++i < n) {
+            p = points[i];
+            c = ret.projection([p.Location.Geo.Lng,p.Location.Geo.Lat]);
+            p.x = c[0];
+            p.y = c[1];
+            p.radius = radius(Math.min(p.Price,5e6));
+            /*if(!uniqueCoords["x"+p.x+"y"+p.y]){
+                u = uniqueCoords["x"+p.x+"y"+p.y] = [];
+            }
+            u.push(p["_id"]);
+            if(u.length>1) {
+                r = u.length%8;
+                p.x += (u.length-1)*Math.floor(u.length/8)*0.7+(s[r][0]*0.035);
+                p.y += (u.length-1)*Math.floor(u.length/8)*0.7+(s[r][1]*0.035);
+            }*/
+          //collide(0.5)(p);
+        }
+
+
+        function collide(jitter) {
+          return function(d) {
+            return data.forEach(function(d2) {
+              var distance, minDistance, moveX, moveY, x, y, random, quadrant;
+              if (d !== d2) {
+                x = (d.x - d2.x);
+                y = (d.y - d2.y);
+                distance = Math.sqrt(x * x + y * y);
+                minDistance = (d.radius + d2.radius)/k;
+                if (distance < minDistance) {
+                    if(distance===0){
+                        distance = minDistance * jitter;
+                        random = Math.random();
+                        quadrant = Math.random <0.5 ? -1 : 1;
+                        moveX = distance * random;
+                        moveY = Math.sqrt(2 * (distance * random) * (random * random)) * quadrant;
+                    } else {
+                        distance = (distance - minDistance) / distance * jitter;
+                        moveX = x * distance;
+                        moveY = y * distance;
+                    }
+                  d.x -= moveX;
+                  d.y -= moveY;
+                  d2.x += moveX;
+                  d2.y += moveY;
+                }
+              }
+            });
+          };
+        };
+
+
+        function collide2(jitter) {
+          return function(d) {
+            return data.forEach(function(d2) {
+              var distance, minDistance, moveX, moveY, x, y, random, quadrant;
+              if (d !== d2) {
+                x = (d.x - d2.x);
+                y = (d.y - d2.y);
+                distance = Math.sqrt(x * x + y * y);
+                minDistance = (d.radius + d2.radius)/k;
+                if (distance < minDistance) {
+                    distance = (distance - minDistance) / distance * jitter;
+                    moveX = x * distance;
+                    moveY = y * distance;
+                }
+                d.x -= moveX;
+                d.y -= moveY;
+                d2.x += moveX;
+                d2.y += moveY;
+              }
+            });
+          };
+        };
+
+
+      //find points at same location
+      //run custom collide - could make it partial (e.g. 0.25) each radius so still overlap
+
+      //console.log(points);
+      //not working
+     /*var q = d3.geom.quadtree(points); //console.log(q);
+      i = 0;
+      while (++i < n) {
+          //if(isNaN(points[i].x)) console.log(points[i]);
+          q.visit(collide(points[i]));
+          //if(isNaN(points[i].x)) console.log(points[i]);
+      }*/
+    var properties= ppr.selectAll("circle")
+          .data(points,function(d) { return (d ? d._id : this._id);});
+        properties.enter().append("circle")
+            .attr("class", function(d,i){ return "ppr";}) //console.log(i+": Price-"+d.Price+" r-"+d.radius);
+        .attr("r",function(d){return d.radius;}) //resized in rescale function
+            .attr("cx", function(d) { return d.x; })
+            .attr("cy", function(d) { return d.y; })
+            /*.attr("cx", function(d) {
+            var c = ret.projection([d.Location.Geo.Lng,d.Location.Geo.Lat]);
+              return c[0];
+            })
+            .attr("cy", function(d) {
+            var c = ret.projection([d.Location.Geo.Lng,d.Location.Geo.Lat]);
+              return c[1];
+            })*/
+            .style("fill-opacity", function(d) { return 0.5; })
+            .style("stroke", "#fff")
+            //.style("fill", function(d) { return "orange"; })
+            .on("mouseover", mouseoverPPR)
+            .on("mousemove", resetTooltipPPR)
+            .on("mouseout", mouseoutPPR)
+            ;
+            properties.exit().remove();
+
+    var force = d3.layout.force()
+        .nodes(points)
+        .gravity(function(){return 1/k;})
+        .charge(function(){return -0.01/k;})
+        .friction(0.0)
+        .on("tick",tick)
+        .start();
+    /*force.on("tick", function() {
+        nodes.style('left', function(d){ return (d.x - lm.config.offset) + 'px';})
+        .style('top', function(d){ return (d.y - lm.config.offset) + 'px';});
+    });*/
+    function tick(e) {
+        properties
+            //.each(collide2(0.5))
+            .attr("cx", function(d){ return (d.x);}) //d.radius/k);})
+            .attr("cy", function(d){ return (d.y);}); //d.radius/k);});
+        }
+    }
+
+
+
+
+    //https://github.com/mbostock/d3/blob/gh-pages/talk/20111018/collision.html#L76-101
+    /*function collide(node) {
+      //var r = node.radius/k,
+          var r = node.radius/k,
+          nx1 = node.x - r,
+          nx2 = node.x + r,
+          ny1 = node.y - r,
+          ny2 = node.y + r;
+      return function(quad, x1, y1, x2, y2) {
+        if (quad.point && (quad.point !== node) && quad.leaf===true) { if(isNaN(quad.point.x))console.log(quad.point);
+          var x = node.x - quad.point.x,
+              y = node.y - quad.point.y,
+              l = Math.sqrt(x * x + y * y),
+              //r = (node.radius + quad.point.radius)/k; //console.log(l);
+              r = (node.radius + quad.point.radius)/k;
+          if (l < r) {
+            l = (l - r) / l * .5;
+            node.x -= x *= l;  //console.log(node.x);
+            node.y -= y *= l;
+            quad.point.x += x;
+            quad.point.y += y;
+          }
+        }
+        return x1 > nx2
+            || x2 < nx1
+            || y1 > ny2
+            || y2 < ny1;
+      };
+  }*/
+
+    function lvl(level){
+      return o.level[level||currentLevel];
+    }
+
+    function lvlId(level){
+      return " Level"+lvl(level)["id"];
+    }
+
+    function drawLevel(level, selector){
+
+      var l,map,p,b;
+      l = lvl(level);
+      console.log("Level:"+level+" Selector:"+selector);
+      map = getMap(level,selector);
+      p=map["paths"];
+      b=map["borders"];
+
+      /*function reset() {
+        var bounds = path.bounds(collection),
+            topLeft = bounds[0],
+            bottomRight = bounds[1];
+
+        svg.attr("width", bottomRight[0] - topLeft[0])
+            .attr("height", bottomRight[1] - topLeft[1])
+            .style("left", topLeft[0] + "px")
+            .style("top", topLeft[1] + "px");
+
+        g.attr("transform", "translate(" + -topLeft[0] + "," + -topLeft[1] + ")");
+
+        feature.attr("d", path);
+      }*/
+
+      gMap.append("g")
+        .selectAll("path")
+          .data(p)
+        .enter().append("path")
+          .attr("id", function(d) { return d["id"];})  //not correct for county
+          .attr("class", function(d) { return l.style.path + " " + d["id"] + lvlId();}) //not correct for county
+          .on("mouseover", mouseover)
+          .on("mousemove", resetTooltip)
+          .on("mouseout", mouseout)
+          .on("click",clicked)
+          .attr("d", path)
+          .attr("style", function(d) { return "";});
+
+        //Prints centroid for each county path to console
+        /*d3.selectAll(".county")
+            .each(function(e){var c = path.centroid(e);
+                //console.log(e);
+                console.log("centroid[\""+e.properties.Name+"\"]=["+ret.projection.invert(c)+"];");
+            });*/
+
+      gMap.append("path")
+        .datum(b)
+        .attr("d", path)
+        .attr("class", l.style.border + " Level" + lvlId());
+
+      /*if(level===2){
+        plotPoints(selector);
+      }*/
+
+      /*g.selectAll("."+l.style.label)
+          .data(p)
+        .enter().append("text")
+          .attr("class", function(d) { return l.style.label + " " + d.id; }) //parameterise
+          .attr("transform", function(d) { return "translate(" + path.centroid(d) + ")"; })
+          .attr("dy", ".35em")
+          .text(function(d) { return d.id.replace(" County",""); });
+      }*/
+    }
+
+    function fillTooltip(item){
+      /*var tooltip=d3.select("#tip")[0][0];
+      console.log(tooltip);
+      tooltip.innerHTML="";
+      var table = "<table><th><td>" + item[o.level[currentLevel].name] + "</td></th>";
+      table+="<tr><td>Housing: " + item["HS2011"] + "</td></tr></table>";
+      console.log(table);
+      tooltip.innerHTML=table;*/
+      d3.select("#tip .zip").text(item["Name"]);
+      d3.select("#tip .ineq .val").text(item["HS2011"]);
+      d3.select("#tip .high .val").text(item["Unocc2011"]);
+      d3.select("#tip .mid .val").text(item["Vacant2011"]);
+      d3.select("#tip .low .val").text(item["PCVac2011"]);
+    }
+
+    function fillPPRTooltip(item){
+      d3.select("#tip_ppr .addr").text(item["Addr"]);
+      d3.select("#tip_ppr .date .val").text(item["Date"]);
+      d3.select("#tip_ppr .price .val").text(fd(item["Price"]));
+      d3.select("#tip_ppr .fmp .val").text(item["FMP"]==="true"?"Yes":"No");
+      d3.select("#tip_ppr .vatex .val").text(item["VAT_Ex"]==="true"?"Yes":"No");
+      d3.select("#tip_ppr .type .val").text(item["Type"]);
+      d3.select("#tip_ppr .proptype .val").text(item["Property"]["Type"]);
+      d3.select("#tip_ppr .beds .val").text(item["Property"]["Bedrooms"]===0?"":item["Property"]["Bedrooms"]);
+      d3.select("#tip_ppr .baths .val").text(item["Property"]["Bathrooms"]===0?"":item["Property"]["Bathrooms"]);
+      //d3.select("#tip_ppr .location .val").text(item["Location"]["Geo"]["Lat"]+","+item["Location"]["Geo"]["Lng"]);
+      d3.select("#tip_ppr .id .val").text(item["_id"]);
+    }
+
+    function mouseoverPPR(d){
+      highlight.call(this,d);
+      var item = d3.select(this);
+      var p = item[0][0].__data__;
+      fillPPRTooltip(p);
+      pprTooltip
+        .style("display","block");
+    }
+
+    function mouseoutPPR(d){
+      unhighlight.call(this,d);
+      pprTooltip.style("display","none");
+    }
+
+    function resetTooltipPPR(d){
+      var item = d3.select(this);
+      pprTooltip
+        .style("top",(event.pageY)-10+"px").style("left",(event.pageX+50)+"px");
+    }
+
+    //function to structure data for current view
+    function setViewData(){
+      //Level will determine which level is taken
+      var dataSales = dataPPR_Cty_Ed_SA;
+    }
+
+
+
+    function mouseover(d){
+        highlight.call(this,d);
+        var item = d3.select(this);
+        var p = item[0][0].__data__.properties;
+        fillTooltip(p);
+        tooltip
+            .style("display","block");
+        window.fetchRegionData = setTimeout(function(){
+                s.setRegion(p["id"],currentLevel);
+                reportUpdate();
+        },400);
+        fetchRegionData();
+    }
+
+    function mouseout(d){
+      unhighlight.call(this,d);
+      tooltip.style("display","none");
+      clearTimeout(window.fetchRegionData);
+    }
+
+    function resetTooltip(d){
+      var item = d3.select(this);
+      tooltip
+        .style("top",(event.pageY)-10+"px").style("left",(event.pageX+50)+"px");
+    }
+
+    function selSubMap(d,k){
+        drawLevel(currentLevel,d.id);
+      }
+
+    function clearSubunitDetails(){
+      g.selectAll(".subunit")
+        .remove();
+      g.selectAll(".subunit-border")
+        .remove();
+    }
+
+    function clearProperties(){
+      g.selectAll(".ppr")
+        .remove();
+    }
+
+    function clearLevel(level){
+      g.selectAll("."+lvlId(level).trim())
+        .remove();
+    }
+
+    function getPathLevel(level){
+      if(level==="ED"){
+        return 1;
+      }
+      if(level==="SA"){
+        return 2;
+      }
+      return 0;
+    }
+
+    ret.reset = function(){
+        clicked();
+    }
+
+    ret.back = function(){
+        clicked("zoomOut");
+    }
+
+    function resetMapParameters(){
+        x = o.width/2;
+        y = o.height/2;
+        centroid=[x,y];
+        k = 1;
+        //zoom = 7;
+        //centered = null;
+        currentLevel=0; //reset level
+    }
+
+    function resizeMapParameters(d){
+        centroid = path.centroid(d);
+        var bounds = path.bounds(d);
+        var newWidth = 2 * Math.max(Math.abs(centroid[0]-bounds[0][0]),Math.abs(centroid[0]-bounds[1][0]));
+        var newHeight = 2 * Math.max(Math.abs(centroid[1]-bounds[0][1]),Math.abs(centroid[1]-bounds[1][1]));
+        k = lvl().smoothScaleMultiple(Math.min(o.width / (newWidth * 1.0), o.height / (newHeight * 1.0)),o.scale);
+        x = centroid[0];
+        y = centroid[1];
+        centered = d;
+    }
+
+    function zoomMap(p,n){
+        k = zoomIncrement(n); //adjust scaling to zoom level
+        x = p[0];
+        y = p[1];
+        centered = p;
+    }
+
+    function zoomIncrement(n){
+        var maxZoom = 19;
+        return (1 << 8 + Math.min(zoom() + n,maxZoom)) / 2 / Math.PI / o.scale; //adjust scaling to zoom level
+    }
+
+    function zoom(){
+        return parseInt(Math.log((k * o.scale * Math.PI * 2) >> 8)/Math.LN2); //determine closest integer zoom level
+    }
+
+    function resizeMap(d,properties){
+        g.transition()
+          .duration(250)
+          .attr("transform","translate(" + o.width/2 + "," + o.height/2 + ")scale(" + k + ")translate("+-x+","+-y+")");
+        o.eventHandlers.onRescale(g,k,l);
+    }
+
+    function mapAction(d){
+        var pathLevel = getPathLevel(d["properties"]["Level"]);
+        if(currentLevel===maxLevel&&pathLevel===currentLevel){
+            return "zoomAll";
+        }
+        if(pathLevel===(currentLevel-1)){
+            return "movePolygon";
+        }
+        return "zoomPolygon";
+    }
+
+    function resetMapFeatures(){
+        if(currentLevel===0){
+            clearSubunitDetails();
+        }
+        if(currentLevel<maxLevel) {
+            clearProperties();
+            clearLevel(currentLevel+1)
+        }
+    }
+
+    function clicked(d){
+        console.log(d);
+        var action;
+        if(!d){
+            //no polygon or parameter - reset map
+            ret.history.clear();
+            resetMapParameters();
+            resetMapFeatures();
+        } else if(!d["properties"]){
+            //zoom out
+            ret.history.back(); //unwind to last saved position
+            resetMapFeatures();
+        } else {
+            //polygon with properties has been provided
+            action = mapAction(d);
+            if(action==="zoomAll"){
+                if(ret.history.last()["l"]<currentLevel){ret.history.save();}; //save at SA
+                zoomMap(d3.mouse(this),1); //zoom map by 1 level centred on point clicked
+            } else {
+                if(action==="movePolygon"){
+                    clearLevel(currentLevel);
+                } else {
+                    ret.history.save();
+                    currentLevel = Math.min(currentLevel+1,maxLevel);
+                }
+                resizeMapParameters(d);
+                selSubMap(d,k);
+            }
+        }
+        l = lvl();
+        mapCurtain(l.showBackgroundMap);
+        if(l.showBackgroundMap){
+          //Find edges and call map.fitBounds()
+          var p = path.bounds(d);
+         // console.log("Path Bounds inverted: WN" + ret.projection.invert([p[0][0],p[0][1]]) + " ES: " + ret.projection.invert([p[1][0],p[1][0]]));
+          var b = scaledProjectionBounds(x,y,ret.projection,k,o.width,o.height);
+          var southWest = new L.LatLng(b.S, b.W);
+          var northEast = new L.LatLng(b.N, b.E);
+          var bounds = new L.LatLngBounds(southWest, northEast);
+          mapL.fitBounds(bounds);
+        }
+        resizeMap(d);
+        if(action!=="zoomAll"&&currentLevel===maxLevel){plotPoints(d.id,k);}
+        rescalePropertySales();
+    }
+
+    //From http://bost.ocks.org/mike/leaflet/
+   /*var map = new L.Map("map", {center: [37.8, -96.9], zoom: 4})
+    .addLayer(new L.TileLayer("http://{s}.tiles.mapbox.com/v3/examples.map-vyofok3q/{z}/{x}/{y}.png"));
+
+    var svg = d3.select(map.getPanes().overlayPane).append("svg"),
+        g = svg.append("g").attr("class", "leaflet-zoom-hide");
+
+    d3.json("us-states.json", function(collection) {
+      var transform = d3.geo.transform({point: projectPoint}),
+          path = d3.geo.path().projection(transform);
+
+      var feature = g.selectAll("path")
+          .data(collection.features)
+        .enter().append("path");
+
+      map.on("viewreset", reset);
+      reset();*/
+
+      // Reposition the SVG to cover the features.
+      /*function reset() {
+        var bounds = path.bounds(collection),
+            topLeft = bounds[0],
+            bottomRight = bounds[1];
+
+        svg.attr("width", bottomRight[0] - topLeft[0])
+            .attr("height", bottomRight[1] - topLeft[1])
+            .style("left", topLeft[0] + "px")
+            .style("top", topLeft[1] + "px");
+
+        g.attr("transform", "translate(" + -topLeft[0] + "," + -topLeft[1] + ")");
+
+        feature.attr("d", path);
+      }
+
+      // Use Leaflet to implement a D3 geometric transformation.
+      function projectPoint(x, y) {
+        var point = map.latLngToLayerPoint(new L.LatLng(y, x));
+        this.stream.point(point.x, point.y);
+      }
+    });*/
+    //////////////////////////
+
+    function scaledProjectionBounds2(centroid,projection,width,height){
+        var p = projection;
+        var WN = p.invert([centroid[0]-width/2,centroid[1]-height/2]);
+        var ES = p.invert([centroid[0]+width/2,centroid[1]+height/2]);
+        return { N:WN[1],S:ES[1],E:ES[0],W:WN[0] };
+    }
+
+    function scaledProjectionBounds(x,y,projection,scaleFactor,width,height){
+        var k = scaleFactor, p = projection;
+        var N,S,E,W;
+        var centroid = p.invert([x,y]);
+        var original = p.invert([width/2,height/2]);
+        var o = p.invert([0,0]);
+        W = (k * centroid[0] - original[0] + o[0])/k;
+        N = (k * centroid[1] - original[1] + o[1])/k;
+        E = 2 * centroid[0] - W;
+        S = 2 * centroid[1] - N;
+        return { N:N,S:S,E:E,W:W };
+    }
+
+    function mapCurtain(off){
+      var item = d3.select("#mapCurtain");
+      attrUpdate(item,"class","off",off);
+    }
+
+    return ret.init(o);
+  }
+
+    function mouseover(d){
+      highlight.call(this,d);
+      var item = d3.select(this);
+      var p = item[0][0].__data__.properties;
+      tooltip
+        .style("display","block")
+        .text(p.COUNTYNAME);
+    }
+
+    function mouseout(d){
+      unhighlight.call(this,d);
+      tooltip.style("display","none");
+    }
+
+    function mousemoved(d){
+      var item = d3.select(this);
+      tooltip
+        .style("top",(event.pageY)-10+"px").style("left",(event.pageX+10)+"px");
+    }
+
+
+
+  var mapOptions = {
+    container : "regionalMap", //container should determine height/width
+    level : [
+      {
+        description : "adminCounties",
+        source : mapAdminCty, //this should perhaps be text to support asynchronous approach
+        sourceFormat : "topojson",
+        id : "COUNTY",
+        name : "COUNTYNAME",
+        style : { path : "county", border : "county-border", label: "county-label" },
+        eventHandlers : { mouseover : highlight, mouseout : unhighlight, mousemove : mousemoved },
+        showBackgroundMap : false,
+        smoothScaleMultiple : function(k){ return k; }
+      },
+      {
+        description : "electoralDistricts",
+        //source : mapElectoralDistrictsbyCounty,
+        source : mapED, //this should perhaps be text to support asynchronous approach
+        sourceFormat : "topojson",
+        id : "CSOED",
+        name : "EDNAME",
+        style : { path : "subunit", border : "subunit-border", label: "subunit-label" },
+        eventHandlers : { mouseover : highlight, mouseout : unhighlight, mousemove : mousemoved },
+        showBackgroundMap : false,
+        smoothScaleMultiple : function(k){ return k; }
+      }, //each level needs selector from previous level
+      {
+        description : "smallAreas",
+        source : mapSA, //this should perhaps be text to support asynchronous approach
+        sourceFormat : "topojson",
+        id : "SMALL_AREA",
+        name : "SMALL_AREA",
+        style : { path : "subunit", border : "subunit-border", label: "subunit-label" },
+        eventHandlers : { mouseover : highlight, mouseout : unhighlight, mousemove : mousemoved },
+        showBackgroundMap : true,
+        smoothScaleMultiple : function(k,scale){
+          var zoom = parseInt(Math.log((k * scale * Math.PI * 2) >> 8)/Math.LN2);
+          return (1 << 8 + zoom) / 2 / Math.PI / scale;
+        }
+      }
+    ],
+    eventHandlers : { onRescale : function(g,k,l){
+        g.selectAll(".county-border")
+          .style("stroke-width", 1.0 / k + "px");
+        g.selectAll(".subunit-border")
+          .style("stroke-width", 1.0 / k + "px");
+        if(l.showBackgroundMap===true){
+            g.selectAll(".LevelCOUNTY")
+              .style("fill-opacity", 0.1);
+            g.selectAll(".LevelCSOED")
+              .style("fill-opacity", 0.2);
+        } else {
+            g.selectAll(".LevelCOUNTY")
+              .style("fill-opacity", 1.0);
+            g.selectAll(".LevelCSOED")
+              .style("fill-opacity", 1.0);
+        }
+      }
+    }
+  }
+
+  function loadCensusData(dsvFile,delimiter){ //use | to parse
+    //var dsv = d3.dsv(delimiter, "text/plain");
+    var dsv = d3.dsv(delimiter,"text/plain");
+    var csv = dsv.parse(dsvFile,function(d) {
+      return {
+        "Level": d["Level"],
+        "id": d["id"],
+        "Name": d["Name"],
+        "Parent": d["Parent"],
+        "Male2011": +d["Male2011"],
+        "Female2011": +d["Female2011"],
+        "Total2011": +d["Total2011"],
+        "PPOcc2011": +d["PPOcc2011"],
+        "Unocc2011": +d["Unocc2011"],
+        "HS2011": +d["HS2011"],
+        "Vacant2011": +d["Vacant2011"],
+        "PCVac2011": +d["PCVac2011"] }
+    },function(error,rows){
+      console.log(rows);
+    });
+    return csv;
+  }
+
+  var census2011DataArray = loadCensusData(dataCensus2011,"|");
+  console.log(census2011DataArray[0]);
+  var census2011Data = {};
+  for(var i=0;i<census2011DataArray.length;i++){
+    census2011Data[census2011DataArray[i]["id"]]=census2011DataArray[i];
+  }
+  console.log(census2011Data["10"]);
+  var map=regionalMap(mapOptions);
+
+  $(function(){
+      $('#mapReset').on('click', function (e) {
+          map.reset();
+      });
+  });
+  $(function(){
+      $('#mapBack').on('click', function (e) {
+          map.back();
+      });
+  });
+  //Send in a projection
+  //Send in id's
+  //Send
+
+function highlight(d){
+  var item = d3.select(this);
+  stateUpdate(item,"class","highlight",true);
+  return false;
+}
+
+function unhighlight(d){
+  var item = d3.select(this);
+  stateUpdate(item,"class","highlight",false);
+  return false;
+}
+
+function subunitHighlight(d){
+  var item = d3.select(this);
+  stateUpdate(item,"class","highlight",true);
+  return false;
+}
+
+function subunitUnhighlight(d){
+  var item = d3.select(this);
+  stateUpdate(item,"class","highlight",false);
+  return false;
+}
+
+//Helper functions - outside object
+function stateUpdate(items,attr,attrPartValue,add){
+  items.each(function(d,i) {
+    var item = d3.select(this);
+    attrUpdate(item,attr,attrPartValue,add);
+  });
+}
+
+function attrUpdate(item,attr,attrPartValue,add){
+  if(add)
+  { //amended to remove if already set to value
+    item.attr(attr,function(d) { return (item.attr(attr) || "").replace(attrPartValue,"").trim() + " " + attrPartValue;})
+  } else {
+    item.attr(attr,function(d) { return item.attr(attr).replace(attrPartValue,"").trim();})
+  }
+}
+
+
+//Clicked2 uses projection rather than transform to centre and zoom
+/*function clicked2(d){
+  var k=4;
+
+  if(!d || centered === d || d.id !== d.properties.COUNTYNAME) {
+    projection.translate([width/2,height/2]).scale(scale);
+    centered = null;
+    g.selectAll("#subunit")
+      .remove();
+    g.selectAll("#subunit-border")
+      .remove();
+
+  } else {
+    console.log(d);
+    var centroid = path.centroid(d),
+      translate = projection.translate();
+    if(centered!==null) k=1;
+    projection.translate([
+      (translate[0]-centroid[0])*k+width/2,
+      (translate[1]-centroid[1])*k+height/2
+    ]).scale(scale*4);
+    centered = d;
+    selSubMap(d);
+  }
+
+  g.selectAll(".county-label")
+    .remove();
+
+  g.selectAll("path").transition()
+    .duration(500)
+    .attr("d", path);
+
+  g.selectAll(".county-label")
+      .data(counties)
+    .enter().append("text")
+      .attr("class", function(d) { return "county-label " + d.id; })
+      .attr("transform", function(d) { return "translate(" + path.centroid(d) + ")"; })
+      .attr("dy", ".35em")
+      .text(function(d) { return d.id.replace(" County",""); });
+
+};*/
+
+</script>
+
+  <script>
+/*
+    var NW = map.projection.invert([325,881/2]);
+    console.log(NW);
+    var mp={};
+    mp.centre=[NW[1], NW[0]];
+    //mp.centre=[53.1, -3];
+    mp.zoom=7;
+
+    //var map = L.map('map').setView([51.505, -0.09], 13);
+    var mapL = L.map('map').setView(mp.centre, mp.zoom);
+
+    //Find edges and call map.fitBounds()
+    var b = scaledProjectionBounds(map.o.width/2,map.o.height/2,map.projection,1.0,map.o.width,map.o.height);
+    var southWest = new L.LatLng(b.S, b.W);
+    var northEast = new L.LatLng(b.N, b.E);
+    var bounds = new L.LatLngBounds(southWest, northEast);
+    //mapL.fitBounds(bounds);
+    mapL.setMaxBounds(bounds);
+    mapL.fitBounds(bounds);
+
+    L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
+      maxZoom: 18//,
+      //attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="http://cloudmade.com">CloudMade</a>'
+    }).addTo(mapL);
+*/
+    //var mapL = new L.Map('map').setView(mp.centre, mp.zoom);
+
+    //Find edges and call map.fitBounds()
+    /*var b = scaledProjectionBounds(map.o.width/2,map.o.height/2,map.projection,1.0,map.o.width,map.o.height);
+    var southWest = new L.LatLng(b.S, b.W);
+    var northEast = new L.LatLng(b.N, b.E);*/
+    /*var coord = {};
+    coord.origin = map.projection.invert([100,200]);
+    coord.extent = map.projection.invert([550,600]);
+    console.log(coord);
+    var southWest = new L.LatLng(coord.extent[1], coord.origin[0]);
+    var northEast = new L.LatLng(coord.origin[1], coord.extent[0]);
+    var bounds = new L.LatLngBounds(southWest, northEast);
+    // Restrict to bounds
+    mapL.setMaxBounds(bounds);
+    // Fit bounds
+    mapL.fitBounds(bounds);
+
+    var tilesLayer = new L.TileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png');
+    mapL.addLayer(tilesLayer);*/
+
+/*
+    L.marker([51.5, -0.09]).addTo(map)
+      .bindPopup("<b>Hello world!</b><br />I am a popup.").openPopup();
+
+    L.circle([51.508, -0.11], 500, {
+      color: 'red',
+      fillColor: '#f03',
+      fillOpacity: 0.5
+    }).addTo(map).bindPopup("I am a circle.");
+
+    L.polygon([
+      [51.509, -0.08],
+      [51.503, -0.06],
+      [51.51, -0.047]
+    ]).addTo(map).bindPopup("I am a polygon.");
+*/
+
+/*    var popup = L.popup();
+
+    function onMapClick(e) {
+      popup
+        .setLatLng(e.latlng)
+        .setContent("You clicked the map at " + e.latlng.toString())
+        .openOn(mapL);
+    }
+
+    mapL.on('click', onMapClick);*/
+
+    /*var coord = {};
+    coord.origin = map.projection.invert([100,100]);
+    coord.extent = map.projection.invert([550,660]);
+    console.log(coord);
+    var southWest = new L.LatLng(coord.extent[1], coord.origin[0]);
+    var northEast = new L.LatLng(coord.origin[1], coord.extent[0]);
+    var bounds = new L.LatLngBounds(southWest, northEast);
+    console.log(bounds);
+    mapL.fitBounds(bounds);*/
+
+    //mapL.fitBounds([53.5,-6],[54.5,-7]);
+
+    function scaledProjectionBounds(x,y,projection,scaleFactor,width,height){
+        var k = scaleFactor, p = projection;
+        var N,S,E,W;
+        var centroid = p.invert([x,y]);
+        var original = p.invert([width/2,height/2]);
+        var o = p.invert([0,0]);
+        W = (k * centroid[0] - original[0] + o[0])/k;
+        N = (k * centroid[1] - original[1] + o[1])/k;
+        E = 2 * centroid[0] - W;
+        S = 2 * centroid[1] - N;
+        return { N:N,S:S,E:E,W:W };
+    }
+
+  </script>
+
+ <script>
+/*var po = org.polymaps;
+
+var map = po.map()
+    .container(document.getElementById("mapPoly").appendChild(po.svg("svg")))
+    .add(po.interact())
+    .add(po.hash());
+
+map.add(po.image()
+    .url(po.url("http://{S}tile.cloudmade.com"
+    + "/1a1b06b230af4efdbb989ea99e9841af" // http://cloudmade.com/register
+    + "/998/256/{Z}/{X}/{Y}.png")
+    .hosts(["a.", "b.", "c.", ""])));
+
+map.add(po.compass()
+    .pan("none"));*/
+</script>
+
+<!--<script src="./data/dataPPRArray_Compressed.js"></script>
+<script>
+      eval(JXG.decompress(dataPPR_Compressed));
+      console.log(dataPPR[50000]);
+</script>!-->
+<!--<script src="./data/dataPPRArray.js"></script>!-->
+<!--<script src="./data/dataPPRCSV20140501.js"></script>!-->
+<script src="./data/dataPPRCSV_20140615.js"></script>
+<script>
+
+      function loadDSV(dsvFile,delimiter){ //use | to parse
+        //var dsv = d3.dsv(delimiter, "text/plain");
+        var dsv = d3.dsv(delimiter,"text/plain");
+        var csv = dsv.parse(dsvFile,function(d) {
+          return {
+            _id: d._id,
+            Date: d.Date,
+            Addr: d.Addr,
+            Price: parseFloat(d.Price.replace(/[^\d\.\-]/g, "")),
+            Price_Gross: parseFloat(d.Price_Gross.replace(/[^\d\.\-]/g, "")),
+            FMP: d.FMP,
+            VAT_Ex: d.VAT_Ex,
+            Type: d.Type,
+            Property: {
+              Type: d["Property.Type"],
+              Bedrooms: +d["Property.Bedrooms"],
+              Bathrooms: +d["Property.Bathrooms"] },
+            Location: {
+              Geo: {
+                Lat: +d["Location.Geo.Lat"],
+                Lng: +d["Location.Geo.Lng"],
+                Exact: d["Location.Geo.Exact"],
+                Source: d["Location.Geo.Source"],
+                found: d["Location.Geo.found"] },
+              Address: d["Location.Address"],
+              Number: d["Location.Number"],
+              Area: d["Location.Area"],
+              SA: d["Location.SA"],
+              ED: d["Location.ED"],
+              Post_Code: d["Location.Post_Code"],
+              City: d["Location.City"],
+              Admin_Cty: d["Location.Admin_Cty"],
+              Admin_Cty_Name: d["Location.Admin_Cty_Name"],
+              Cty: d["Location.Cty"],
+              Prov: d["Location.Prov"],
+              Ctry: d["Location.Ctry"] } }
+        },function(error,rows){
+          console.log(rows);
+        });
+        return csv;
+      }
+
+      var dataPPR = loadDSV(dataPPRCSV,"|");
+      console.log(dataPPR.length);
+      console.log(dataPPR[10]);
+
+
+      var o,n=0,index={};
+      for(var i=0;i<dataPPR.length;i++){
+        o=dataPPR[i];
+        if(o)
+          index[o["_id"]]=i;
+      }
+      console.log(index["2011_12918"]); //50000
+      console.log(dataPPR[0]);
+
+      function ref(options){
+        ret = {};
+        ret.addData = function(key,data){
+          ret["data"][key] = data;
+        }
+        ret.lookup = function(key,value,field){
+          return ret["data"][key][value][field];
+        }
+        ret.parent = function(key,value){
+          return ret["data"][key][value]["parent"];
+        }
+        function init(options){
+          ret["data"] = {};
+          return ret;
+        }
+        return init(options);
+      }
+</script>
+<!--<script src="./data/dataPPRId.js"> //may not need this if can summarise dynamically </script>!-->
+<script>
+      function propertySalesData(data){
+        var r = {}; //result
+        r.data = {};
+        r.cache = {};
+        r.levels = ["Admin_Cty","ED","SA"]; //pass this in
+
+        r.fillLevel = function(level){
+          if(r.cache[level])
+            return r.cache[level];
+          else
+            return r.cache[level] = r.data.reduce(reduceByField(r.levels[level]),[]);
+        }
+
+        var x=0;
+        function reduceByField(field){
+          return function(res,e,i,a){
+            //console.log(e);
+            //console.log(res);
+            if(e){
+              var f = e["Location"][field]; //need to know structure
+              if((++x%10000)===0)console.log(f);
+              if(f){
+                if(!res[f]){
+                  res[f]=[];
+                }
+                res[f].push(e._id);
+              }
+            }
+            return res;
+          }
+        }
+
+        r.getData = function(level,key){
+          if(!r.cache[level])
+            r.cache[level]=r.fillLevel(level);
+
+          if(!key)
+            return r.cache[level];
+
+          if(r.cache[level][key])
+            return r.cache[level][key];
+          else
+            return {};
+
+        }
+
+        r.stats = function(level,key){
+          return stats(r.getData(level,key).map(function(e,i,a){ if(!r.data[index[e]]["Price"]) { return 0; } return parseFloat(r.data[index[e]]["Price"]); }));
+        }
+
+        function stats(a){
+          var res = {};
+          var n = a.length;
+          if(n>0){
+            a.sort(ascending);
+            res["count"]=n;
+            res["sum"]=a.reduce(function(r, e, i, a){ return r + e;});
+            res["mean"]=res["sum"]/res["count"];
+            res["median"]=nthPercentile(50);
+            res["min"]=a[0];
+            res["max"]=a[n-1];
+            res["var"]=a.reduce(function(r, e, i, a){ return Math.pow(e-res["mean"],2);},0)/(n-1);
+            res["stdDev"]=Math.sqrt(res["var"]);
+            res["decile1"]=nthPercentile(10);
+            res["decile9"]=nthPercentile(90);
+            res["quartile1"]=nthPercentile(25);
+            res["quartile3"]=nthPercentile(75);
+            res["mode"]=a.reduce(function(r,e,i,a){
+              if(e!==r["last"]){
+                r["last"]=e;
+                r["count"]=0;
+              } else {
+                if(++r["count"]>r["modeCount"]){
+                  r["modeCount"]=r["count"];
+                  r["mode"]=e;
+                }
+              }
+              return r;
+            },{ "mode":0, "modeCount":0, "last":0, "count":0 })["mode"];
+            res["zeroes"]=a.reduce(function(r,e,i,a){ if(e===0) r++; return r; },0);
+            r.statsArray = a;
+          }
+          return res;
+
+          function nthPercentile(nth){
+            var d = (100/nth);
+            var p = Math.floor(n/d);
+            if(n%d){
+              return a[p];
+            } else {
+              return (a[p-1]+a[p])/2.0;
+            }
+          }
+
+          function ascending(a, b) {
+            return a - b;
+          }
+        }
+
+        function init(data){
+          r.data=data;
+          r.getData(0);
+          console.log("Completed property sales level 0");
+          console.log(r.cache["0"].length);
+          return r;
+        }
+        return init(data);
+      }
+
+      var propertySales = propertySalesData(dataPPR); //wrong data set
+      console.log(propertySales.stats(0,"02"));
+      //console.log(propertySales.statsArray);
+
+      var dataDims = ["Location.Cty",
+              "Location.Admin_Cty",
+              "Location.ED",
+              "Location.SA",
+              "Date",
+              "Property.Bedrooms",
+              "Property.Type",
+              "Property.Bathrooms",
+              "mre"];
+
+      /*var dataIndices = [
+                {"field":"Location.SA","index":dataPPRBySA,"indexMap":index}, //problem with timing here
+                {"field":"Location.ED","index":dataPPRByED,"indexMap":index}, //should move to configuration
+              ];*/
+
+      function defaultResult(){
+        return { "count":0, "sum":0, "mean":0, "median":0, "min":0, "max":0, "var":0, "stdDev":0, "mode":0,
+        "decile1":0, "decile9":0, "quartile1":0, "quartile3":0 };
+      }
+
+      //var pxf = jdcDataProvider({data : dataPPR.slice(0), dims : dataDims, indices : dataIndices, result : defaultResult });
+      console.log(dataPPR[0]);
+      var pxf = jdcDataProvider({data : dataPPR, dims : dataDims });
+      var searchKey = { "Location.Cty":"_",
+                        "Location.Admin_Cty":"05",
+                        "Location.ED":"_",
+                        "Location.SA":"_",
+                        "Location.Cty":"_",
+                        "Date":"_",
+                        "Property.Bedrooms":"_",
+                        "Property.Type":"_",
+                        "Property.Bathrooms":"_",
+                        "mre":"Count"};
+
+      var zzz = pxf.getPopulation({"Location.ED":"16003"});
+      console.log(zzz);
+
+		//*******************************************************************************
+		//Step X - Create Dashboard Definitions
+		//*******************************************************************************
+        s=function(){
+            ret = {};
+            var lvl = 0;
+            var reg = "_";
+            ret.setRegion=function(id,level){
+                reg=id;
+                lvl=level;
+            }
+            ret.Admin_Cty = function(){
+                if(lvl===0){
+                    return reg;
+                }
+                return "_";
+            }
+            ret.ED = function(){
+                if(lvl===1){
+                    return reg;
+                }
+                return "_";
+            }
+            ret.SA = function(){
+                if(lvl===2){
+                    return reg;
+                }
+                return "_";
+            }
+            function regionLevel(){
+                var levels = ["Location.Admin_Cty","Location.ED","Location.SA"];
+                return levels[map.level()];
+            }
+            return ret;
+        }();
+
+		var reportDef1 = {
+			ref: 1,
+			name : "rpt1",
+			container : "rptArrears",
+			key : { "Location.Cty":"_",
+                              "Location.Admin_Cty": s.Admin_Cty,
+                              "Location.ED": s.ED,
+                              "Location.SA": s.SA,
+                              "Location.Cty":"_",
+                              "Date":"_",
+                              "Property.Bedrooms":"_",
+                              "Property.Type":"_",
+                              "Property.Bathrooms":"_",
+                              "mre":"count" }, //may be good practice to define all
+			cols : [  { display : "", css : "h4" }, //need to reserve space and set css
+						//{ display : "Movement 13 mths", css : "sparkline" , key : { mre : "BlD"}, chartType : nv.models.sparkbarPlus },
+                        { display : "2010", key : { "Date" : xfFilter('Date','2010',function(d){return d.indexOf("2010")>-1;})} },
+						{ display : "2011", key : { "Date" : xfFilter('Date','2011',function(d){return d.indexOf("2011")>-1;})} },
+						{ display : "2012", key : { "Date" : xfFilter('Date','2012',function(d){return d.indexOf("2012")>-1;})} },
+                        { display : "2013", key : { "Date" : xfFilter('Date','2013',function(d){return d.indexOf("2013")>-1;})} },
+                        { display : "2014", key : { "Date" : xfFilter('Date','2014',function(d){return d.indexOf("2014")>-1;})} },
+                        { display : "All", key : { "Date" : "_"} },
+                        { display : "     ", css : "blank" }
+						 ],
+			rows : [ { display : "" }, //need to reserve space
+                        { display : "Count", key : { "mre" : "count" } },
+                        { display : "Total", key : { "mre" : "sum" } },
+                        { display : "Average", key : { "mre" : "mean" } },
+                        { display : "Minimum", key : { "mre" : "min" } },
+                        { display : "Maximum", key : { "mre" : "max" } },
+                        { display : "Mode", key : { "mre" : "mode" } },
+                        { display : "Median", key : { "mre" : "median" } },
+                        { display : "90th percentile", key : { "mre" : "decile9" } },
+                        { display : "Top quartile", key : { "mre" : "quartile3" } },
+                        { display : "Bottom quartile", key : { "mre" : "quartile1" } },
+                        { display : "10th percentile", key : { "mre" : "decile1" } } ],
+			eventHandlers : { '.cell' : { click : cellClicked }, 'tr' : { mouseover : highlight, mouseout : unhighlight } }
+		};
+
+        var state = {"Location.Cty":"_",
+                          "Location.Admin_Cty":"_",
+                          "Location.ED":"_",
+                          "Location.SA":"_",
+                          "Location.Cty":"_",
+                          "Date":"_",
+                          "Property.Bedrooms":"_",
+                          "Property.Type":"_",
+                          "Property.Bathrooms":"_",
+                          "mre":"_" };
+
+		var rpts = {};
+		var rpt = rpts[reportDef1.name] = rpts[reportDef1.ref] = jdcGrid({source : pxf, def: reportDef1});
+        rpt.update();
+		//state.addView(ret);
+        function reportUpdate(){
+            rpt.update();
+        }
+
+      //var testResult = pxf.segment(searchKey);
+      //console.log(testResult);
+
+      /* Not used - kept because tree navigation could be used again
+      //Should I construct stats at this point?
+      //Level & key e.g. [0]{33: {sum}} - could add to properties of path? - this could be dynamic - 33 = path.id
+      function getDataForLevel(obj,depth,key){
+        //if key = null then all
+        //recursive flatten
+        var x = leafAggregate(obj);
+
+      }
+
+      function walkTree(key,path){ //not finished
+          var d=r.data;
+          if(path){
+            for(var i=0;i<path.length;i++){
+              d=d[path[i]]; //should walk down data
+            }
+            return r.cache[level][key] = leafAggregate(d[key]); //may not have key? - will return keys where no key - return multiple arrays? - useful to inflate
+          } else {
+          }
+      }
+
+      function leafAggregate(obj){
+        var result = [];
+        if(Object.prototype.toString.call(obj)==='[object Array]'){
+          return obj;
+        } else { //check object has keys? in case badly formed
+          for(k in obj){
+            result.push.apply(result, leaf(obj[k]);
+          }
+        }
+        return result;
+      }*/
+/*var science = {};
+// Welford's algorithm.
+science.stats.mean = function(x) {
+  var n = x.length;
+  if (n === 0) return NaN;
+  var m = 0,
+      i = -1;
+  while (++i < n) m += (x[i] - m) / (i + 1);
+  return m;
+};
+science.stats.median = function(x) {
+  return science.stats.quantiles(x, [.5])[0];
+};
+science.stats.mode = function(x) {
+  var counts = {},
+      mode = [],
+      max = 0,
+      n = x.length,
+      i = -1,
+      d,
+      k;
+  while (++i < n) {
+    k = counts.hasOwnProperty(d = x[i]) ? ++counts[d] : counts[d] = 1;
+    if (k === max) mode.push(d);
+    else if (k > max) {
+      max = k;
+      mode = [d];
+    }
+  }
+  if (mode.length === 1) return mode[0];
+};
+// Uses R's quantile algorithm type=7.
+science.stats.quantiles = function(d, quantiles) {
+  d = d.slice().sort(science.ascending);
+  var n_1 = d.length - 1;
+  return quantiles.map(function(q) {
+    if (q === 0) return d[0];
+    else if (q === 1) return d[n_1];
+
+    var index = 1 + q * n_1,
+        lo = Math.floor(index),
+        h = index - lo,
+        a = d[lo - 1];
+
+    return h === 0 ? a : a + h * (d[lo] - a);
+  });
+};
+// Unbiased estimate of a sample's variance.
+// Also known as the sample variance, where the denominator is n - 1.
+science.stats.variance = function(x) {
+  var n = x.length;
+  if (n < 1) return NaN;
+  if (n === 1) return 0;
+  var mean = science.stats.mean(x),
+      i = -1,
+      s = 0;
+  while (++i < n) {
+    var v = x[i] - mean;
+    s += v * v;
+  }
+  return s / (n - 1);
+};*/
+
+
+</script>

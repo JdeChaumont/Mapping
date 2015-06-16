@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<link href="./css/bootstrap.min.css" rel="stylesheet" type="text/css">
+<link href="../lib/leaflet/leaflet.css" rel="stylesheet" type="text/css">
+<style>
+
+.background {
+  fill : none;
+  pointer-events: all;
+}
+
+.county {
+  fill: #ddd;
+}
+
+.county .active {
+  fill: orange;
+}
+
+.county-border {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.0px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.county-label {
+  fill: #000;
+  fill-opacity: 1.0;
+  font-size: 9px;
+  font-weight: 500;
+  text-anchor: middle;
+}
+
+
+.county.highlight {
+  fill: orange;
+}
+
+.subunit {
+  fill: orange;
+  stroke: #fff;
+  stroke-width: 1.0px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/*#subunit .active {
+  fill: orange;
+  pointer-events: none;
+}*/
+
+.subunit-border {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.0px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.subunit.highlight {
+  fill: #cdc;
+}
+
+text {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+/* ************ ZIP INFO WINDOW ************ from Trulia*/
+
+#tip {
+  display: none;
+  pointer-events: none;
+  position: absolute;
+  background: url('./black85.png');
+  -moz-border-radius: 5px;
+  border-radius: 5px;
+  padding: 10px 20px 10px 7px;
+  color: white;
+  z-index: 1337;
+  width: 250px;
+}
+
+#tip .zip {
+  margin-left: 12px;
+  font-size: 30px;
+  line-height: 32px;
+}
+
+#tip .hoods {
+  margin-bottom: 15px;
+  font-style: italic;
+  margin-left: 12px;
+}
+
+#tip table {
+  width: 100%;
+}
+
+#tip th {
+  text-align: left;
+}
+
+#tip td {
+  text-align: right;
+}
+
+#tip th, #tip td {
+  border-top: 1px solid #666;
+  padding: 3px 0 12px 0;
+}
+
+#tip tr .descr {
+  color: #aaa;
+  display: block;
+  font-size: 12px;
+  line-height: 14px;
+  margin-left: 12px;
+}
+
+#tip tr.ineq .descr {
+  margin-left: 0;
+}
+
+#tip tr.ineq {
+  font-size: 18px;
+  line-height: 20px;
+}
+
+#tip tr.ineq th {
+  padding-left: 12px;
+}
+
+#tip table .circle {
+  float: left;
+  width: 8px;
+  height: 8px;
+  margin: 3px 5px 0 0;
+  -moz-border-radius: 100px;
+  border-radius: 100px;
+  background: white;
+  aborder: 1px solid white;
+}
+
+#tip table tr.high .circle {
+  background: red;
+}
+
+#tip table tr.mid .circle {
+  background: orange;
+}
+
+#tip table tr.low .circle {
+  background: green;
+}
+
+</style>
+<body>
+    <div class="row-fluid col-sm-12" style="padding:0">
+      <div class="col-sm-6" id="regionalMap" style="width:650px"></div>
+      <div class="col-sm-6" id="map" style="width:650px;height:881px"></div>
+
+    </div>
+    <div id="tip">
+      <p class="zip"></p>
+      <p class="hoods"></p>
+      <table>
+        <tbody>
+          <tr class="ineq">
+            <th>
+              <div class="title">Total</div>
+              <div class="descr">Total properties in area</div>
+            </th>
+            <td class="val"></td>
+          </tr>
+          <tr class="high">
+            <th>
+              <div class="title"><span class="circle high"></span>Unoccupied</div>
+              <div class="descr">Unoccupied properties</div>
+            </th>
+            <td class="val"></td>
+          </tr>
+          <tr class="mid">
+            <th>
+              <div class="title"><span class="circle mid"></span>Vacant</div>
+              <div class="descr">Vacant properties</div>
+            </th>
+            <td class="val"></td>
+          </tr>
+          <tr class="low">
+            <th>
+              <div class="title"><span class="circle low"></span>Vacancy rate</div>
+              <div class="descr">Vacancy rate in area</div>
+            </th>
+            <td class="val"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+<script src="../lib/base64compress/jsxcompressor.min.js"></script>
+<script src="../lib/d3/d3.v3.min.js"></script>
+<script src="../lib/d3/topojson.v0.min.js"></script>
+<script src="../lib/d3/d3.hexbin.v0.min.js"></script>
+<script src="../lib/jquery/jquery-1.10.2.js"></script>
+<script src="./census/mapAdminCounties.json"></script>
+<script src="../lib/leaflet/leaflet.js"></script>
+<script src="../lib/polymaps/polymaps.js"></script>
+<script src="./census/mapElectoralDistrictsbyCounty.json"></script>
+<script src="./census/mapSmallAreasByED.json"></script>
+
+<script>
+  function fireEvent(name, target) {
+    //Ready: create a generic event
+    var evt = document.createEvent("Events")
+    //Aim: initialize it to be the event we want
+    evt.initEvent(name, true, true); //true for can bubble, true for cancelable
+    //FIRE!
+    target.dispatchEvent(evt);
+  }
+  function foobar(e){
+      console.log("foobar called");
+      console.log(this);
+  }
+
+  function testEvents() {
+      window.addEventListener("doubleClick", foobar, false); //false to get it in bubble not capture.
+  }
+
+  function singleClick(e) {
+      fireEvent("singleClick", document);
+      console.log("singleClick fired");
+      console.log(this);
+  }
+
+  function doubleClick(e) {
+      fireEvent("doubleClick", document);
+      console.log("doubleClick fired");
+      console.log(this);
+  }
+
+  function s(e){
+    console.log("single fired");
+    clicked.call(this,e);
+  }
+
+  function d(e){
+    console.log("double fired");
+    doubleClicked.call(this,e);
+  }
+
+  //This works
+  function clickParse(single,double){
+    return function(e){
+      var that = this;
+      var dblclick = parseInt($(that).data('double'), 10) || 0;
+      $(that).data('double', ++dblclick);
+      if(dblclick>1){
+        double.call(that,e);
+      } else {
+          setTimeout(function() {
+            if (parseInt( $(that).data('double'), 10) < 2) {
+                single.call(that,e);
+            }
+            $(that).data('double', 0);
+          }, 300);
+      }
+    }
+  }
+
+  /*
+  document.body.onclick = function (e) {
+      var isRightMB;
+      e = e || window.event;
+
+      if ("which" in e)  // Gecko (Firefox), WebKit (Safari/Chrome) & Opera
+          isRightMB = e.which == 3; 
+      else if ("button" in e)  // IE, Opera 
+          isRightMB = e.button == 2; 
+
+      alert("Right mouse button " + (isRightMB ? "was not " : "") + "clicked!");
+  } */
+
+</script>
+
+
+<script>
+
+  //*******************************************************************************
+  //Module Template - not used just a template
+  //*******************************************************************************
+  function moduleTemplate(o){
+    var ret = {};
+
+    var defaults = {
+      
+    }
+
+    ret.init = function(options){
+        
+        // Extend defaults
+        var extended = defaults;
+        for (var prop in options) {
+          if (options.hasOwnProperty(prop)) {
+            extended[prop] = options[prop];
+          }
+        }
+        var o = ret.options = extended; //var o used for shorthand
+
+      return ret;
+    }
+
+    ret.update = function(){
+      
+    }
+
+    return ret.init(o);
+  }
+
+  //*******************************************************************************
+  //Module Template - not used just a template
+  //*******************************************************************************
+  function regionalMap(o){
+    var ret = {};
+    var o;
+    var centered = null;
+    var path,svg,g,tooltip;
+    var currentLevel = 0;
+    var k = 1; //zoom level
+
+    var defaults = {
+      margin : 10,
+      width : 100,
+      height : 137, //factor for shape of Ireland
+      scale : 1200*(137/85.33)*1,
+      projection : d3.geo.albers,
+      center : [-3.8, 53.3],
+      rotate : [4.4, 0],
+      parallels : [52, 56]      
+    }
+
+    ret.init = function(options){
+        
+        // Extend defaults
+        var extended = defaults;
+        for (var prop in options) {
+          if (options.hasOwnProperty(prop)) {
+            extended[prop] = options[prop];
+          }
+        }
+        o = ret.options = extended; //var o used for shorthand
+
+        o.width = d3.select("#"+o.container)[0][0].clientWidth-o.margin;
+        o.height = o.width * 1.37;
+        o.scale = 1200*(o.height/85.33)*1;
+
+        ret.projection = o.projection()
+                .center(o.center)
+                .rotate(o.rotate)
+                .parallels(o.parallels)
+                .scale(o.scale)
+                .translate([o.width / 2, o.height / 2]);  
+
+        //tooltip=initTooltip();
+        tooltip=d3.select("#tip");
+        draw();
+        //setTimeout(hex,10000);
+
+      return ret;
+    }
+
+    function initTooltip(){
+      return d3.select("body")
+          .append("div")
+          .attr("id","tip")
+          .style("position","absolute")
+          .style("z-index","10")
+          .style("visibility","visible")
+          .text("to be defined");
+    }
+
+    function draw(){
+      
+      var l = o.level[0]; //draw from first level of map
+
+      path = d3.geo.path()
+          .projection(ret.projection)
+          .pointRadius(2);
+
+      svg = d3.select("#" + o.container).append("svg")
+          .attr("width", o.width)
+          .attr("height", o.height);
+
+      svg.append("rect")
+          .attr("class","background")
+          .attr("width", o.width)
+          .attr("height", o.height)
+          .on("click",clicked);
+
+      g = svg.append("g");
+
+      //Level specific
+      var irl = l.source;
+      var counties = topojson.object(irl, irl.objects.IE).geometries;
+      var borders = topojson.mesh(irl, irl.objects.IE, function(a, b) { return a !== b; });
+      drawLevel(0,null,counties,borders);
+
+    }
+
+    function hex(){
+      
+      var points = dataPPR.map(function(e,i){return ret.projection([e.Location.Geo.Lng,e.Location.Geo.Lat]) });
+
+      var color = d3.scale.linear()
+          .domain([0, 20])
+          .range(["white", "steelblue"])
+          .interpolate(d3.interpolateLab);
+
+      var hexbin = d3.hexbin()
+          .size([o.width, o.height])
+          .radius(14);
+
+      var opacity = d3.scale.linear()
+          .domain([0, 1000])
+          .range([0, 1])
+          .interpolate(d3.interpolateNumber);
+
+      /*var hexsvg = d3.select("body").append("svg")
+          .attr("width", o.width)
+          .attr("height", o.height);*/
+
+      var hexagon = svg.append("g")
+          .attr("class", "hexagons")
+        .selectAll("path")
+          .data(hexbin(points))
+        .enter().append("path")
+          .attr("d", hexbin.hexagon(14))
+          .attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; })
+          //.style("fill-opacity", function(d) { return 0.5; })
+          .style("fill", function(d) { return color(d.length); });
+          //.style("fill-opacity", function(d) { return opacity(d.length); })
+          //.style("fill", function(d) { return "black"; });
+    }
+
+    function drawLevel(level, selector, paths, border){
+
+      currentLevel = level;
+
+      var l = o.level[level];
+      var p = paths || l.source[selector];
+      var b = border || p;
+
+      g.append("g")
+        .selectAll("path")
+          .data(p)
+        .enter().append("path")
+          .attr("id", function(d) { return d[l.id];})  //not correct for county
+          .attr("class", function(d) { return l.style.path+ " " + d.properties[l.id];}) //not correct for county
+          .on("mouseover", mouseover)
+          .on("mousemove", resetTooltip)
+          .on("mouseout", mouseout)
+          .on("click",clicked)
+          .attr("d", path);
+
+        g.append("path")
+            .datum(b)
+            .attr("d", path)
+            .attr("class", l.style.border);
+
+      if(currentLevel===0){
+        g.selectAll("."+l.style.label)
+              .data(p)
+            .enter().append("text")
+              .attr("class", function(d) { return l.style.label + " " + d.id; }) //parameterise
+              .attr("transform", function(d) { return "translate(" + path.centroid(d) + ")"; })
+              .attr("dy", ".35em")
+              .text(function(d) { return d.id.replace(" County",""); });
+      } else {     
+        g.selectAll("."+l.style.path)
+          .style("stroke-width", 1.0 / k + "px");     
+      } 
+    }
+
+    function fillTooltip(item){
+      /*var tooltip=d3.select("#tip")[0][0];
+      console.log(tooltip);
+      tooltip.innerHTML="";
+      var table = "<table><th><td>" + item[o.level[currentLevel].name] + "</td></th>";
+      table+="<tr><td>Housing: " + item["HS2011"] + "</td></tr></table>";
+      console.log(table);
+      tooltip.innerHTML=table;*/
+      d3.select("#tip .zip").text(item[o.level[currentLevel].name]);
+      d3.select("#tip .ineq .val").text(item["HS2011"]);
+      d3.select("#tip .high .val").text(item["Unocc2011"]);
+      d3.select("#tip .mid .val").text(item["Vacant2011"]);
+      d3.select("#tip .low .val").text(item["PCVac20111"]);
+    }
+
+    //function to structure data for current view
+    function setViewData(){
+      //Level will determine which level is taken
+      var dataSales = dataPPR_Cty_Ed_SA;
+      
+    }
+
+    function mouseover(d){
+      highlight.call(this,d);
+      var item = d3.select(this);
+      var p = item[0][0].__data__.properties;
+      fillTooltip(p);
+      tooltip
+        .style("display","block");
+        //.text(p[o.level[currentLevel].name]);
+    }
+
+    function mouseout(d){
+      unhighlight.call(this,d);
+      tooltip.style("display","none");
+    }
+
+    function resetTooltip(d){
+      var item = d3.select(this);
+      tooltip
+        .style("top",(event.pageY)-10+"px").style("left",(event.pageX+50)+"px");
+    }
+
+    function selSubMap(d,k){
+
+        clearSubunitDetails();
+        var parent=o.level[currentLevel++];
+        console.log(d.properties[parent.id])
+        drawLevel(currentLevel,d.properties[parent.id]); //Mess
+
+      }
+
+    function clearSubunitDetails(){
+      g.selectAll(".subunit")
+        .remove();
+      g.selectAll(".subunit-border")
+        .remove();     
+    }
+
+    function clicked(d){
+        var x,y;
+
+        //scale based on lesser of max fit for height or width        
+        var bBox = d3.select(this)[0][0].getBBox();
+        k = Math.min(o.width / (bBox.width * 1.1), o.height / (bBox.height * 1.1)); //need to access height and width
+
+        //if(d && centered !== d && d.id !== d.properties.COUNTYNAME) {
+        //if(!d || centered === d || d.id !== parent) {
+        if(currentLevel===(o.level.length-1)){
+          x = o.width/2;
+          y = o.height/2;
+          k = 1;
+          centered = null;
+          clearSubunitDetails();
+          currentLevel=0; //reset level
+        } else {
+          var centroid = path.centroid(d);
+          x = centroid[0];
+          y = centroid[1];
+          centered = d;
+          selSubMap(d,k);
+        }
+
+        //Find edges and call map.fitBounds()
+        var b = scaledProjectionBounds(x,y,ret.projection,k,o.width,o.height);
+        var southWest = new L.LatLng(b.S, b.W);
+        var northEast = new L.LatLng(b.N, b.E);
+        var bounds = new L.LatLngBounds(southWest, northEast);
+        mapL.fitBounds(bounds);
+
+        g.transition()
+          .duration(250)
+          .attr("transform","translate(" + o.width/2 + "," + o.height/2 + ")scale(" + k + ")translate("+-x+","+-y+")");
+    }
+
+    function scaledProjectionBounds(x,y,projection,scaleFactor,width,height){
+        var k = scaleFactor, p = projection;
+        var N,S,E,W;
+        var centroid = p.invert([x,y]);
+        var original = p.invert([width/2,height/2]);
+        var o = p.invert([0,0]);
+        W = (k * centroid[0] - original[0] + o[0])/k;
+        N = (k * centroid[1] - original[1] + o[1])/k;
+        E = 2 * centroid[0] - W;
+        S = 2 * centroid[1] - N; 
+        return { N:N,S:S,E:E,W:W };     
+    }
+
+
+    return ret.init(o);
+  }
+
+    function mouseover(d){
+      highlight.call(this,d);
+      var item = d3.select(this);
+      var p = item[0][0].__data__.properties;
+      tooltip
+        .style("display","block")
+        .text(p.COUNTYNAME);
+    }
+
+    function mouseout(d){
+      unhighlight.call(this,d);
+      tooltip.style("display","none");
+    }
+
+    function mousemoved(d){
+      var item = d3.select(this);
+      tooltip
+        .style("top",(event.pageY)-10+"px").style("left",(event.pageX+10)+"px");
+    }
+
+
+
+  var mapOptions = { 
+    container : "regionalMap", //container should determine height/width
+    level : [    
+      { 
+        description : "adminCounties", 
+        source : mapAdminCounties, 
+        id : "COUNTY",
+        name : "COUNTYNAME",  
+        style : { path : "county", border : "county-border", label: "county-label" }, 
+        eventHandlers : { mouseover : highlight, mouseout : unhighlight, mousemove : mousemoved }  
+      },
+      { 
+        description : "electoralDistricts", 
+        source : mapElectoralDistrictsbyCounty, 
+        id : "CSOED",
+        name : "EDNAME", 
+        style : { path : "subunit", border : "subunit-border", label: "subunit-label" },
+        eventHandlers : { mouseover : highlight, mouseout : unhighlight, mousemove : mousemoved } 
+      }, //each level needs selector from previous level
+      { 
+        description : "smallAreas", 
+        source : mapSmallAreasByED, 
+        id : "SMALL_AREA",
+        name : "SMALL_AREA", 
+        style : { path : "subunit", border : "subunit-border", label: "subunit-label" },
+        eventHandlers : { mouseover : highlight, mouseout : unhighlight, mousemove : mousemoved }
+      }
+    ]
+  }
+
+  var map=regionalMap(mapOptions);
+  //Send in a projection
+  //Send in id's
+  //Send
+
+
+
+function highlight(d){
+  var item = d3.select(this);
+  stateUpdate(item,"class","highlight",true);
+  return false;
+}
+
+function unhighlight(d){
+  var item = d3.select(this);
+  stateUpdate(item,"class","highlight",false);
+  return false;
+}
+
+function subunitHighlight(d){
+  var item = d3.select(this);
+  stateUpdate(item,"class","highlight",true);
+  return false;
+}
+
+function subunitUnhighlight(d){
+  var item = d3.select(this);
+  stateUpdate(item,"class","highlight",false);
+  return false;
+}
+
+//Helper functions - outside object
+function stateUpdate(items,attr,attrPartValue,add){
+  items.each(function(d,i) {
+    var item = d3.select(this);
+    attrUpdate(item,attr,attrPartValue,add);
+  }); 
+}
+
+function attrUpdate(item,attr,attrPartValue,add){
+  if(add)
+  {
+    item.attr(attr,function(d) { return (item.attr(attr) || "").trim() + " " + attrPartValue;})
+  } else {
+    item.attr(attr,function(d) { return item.attr(attr).replace(attrPartValue,"").trim();})
+  }
+}
+
+
+//Clicked2 uses projection rather than transform to centre and zoom
+/*function clicked2(d){
+  var k=4;
+
+  if(!d || centered === d || d.id !== d.properties.COUNTYNAME) {
+    projection.translate([width/2,height/2]).scale(scale);
+    centered = null; 
+    g.selectAll("#subunit")
+      .remove();
+    g.selectAll("#subunit-border")
+      .remove();
+
+  } else {
+    console.log(d);
+    var centroid = path.centroid(d),
+      translate = projection.translate();
+    if(centered!==null) k=1;
+    projection.translate([
+      (translate[0]-centroid[0])*k+width/2,
+      (translate[1]-centroid[1])*k+height/2
+    ]).scale(scale*4);
+    centered = d;
+    selSubMap(d);
+  }
+
+  g.selectAll(".county-label")
+    .remove();
+
+  g.selectAll("path").transition()
+    .duration(500)
+    .attr("d", path);
+
+  g.selectAll(".county-label")
+      .data(counties)
+    .enter().append("text")
+      .attr("class", function(d) { return "county-label " + d.id; })
+      .attr("transform", function(d) { return "translate(" + path.centroid(d) + ")"; })
+      .attr("dy", ".35em")
+      .text(function(d) { return d.id.replace(" County",""); });
+
+};*/
+
+</script>
+
+  <script>
+
+    var NW = map.projection.invert([350,450]);
+    console.log(NW);
+    var mp={};
+    mp.centre=[NW[1], NW[0]];
+    //mp.centre=[53.1, -3];
+    mp.zoom=7;
+
+    //var map = L.map('map').setView([51.505, -0.09], 13);
+    var mapL = L.map('map').setView(mp.centre, mp.zoom);
+
+    L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
+      maxZoom: 18//,
+      //attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="http://cloudmade.com">CloudMade</a>'
+    }).addTo(mapL);
+
+    var coord = {};
+    coord.origin = map.projection.invert([0,0]);
+    coord.extent = map.projection.invert([650,881]);
+    var southWest = new L.LatLng(coord.extent[1], coord.origin[0]);
+    var northEast = new L.LatLng(coord.origin[1], coord.extent[0]);
+    var bounds = new L.LatLngBounds(southWest, northEast);
+    console.log(bounds);
+    mapL.fitBounds(bounds);
+
+/*
+    L.marker([51.5, -0.09]).addTo(map)
+      .bindPopup("<b>Hello world!</b><br />I am a popup.").openPopup();
+
+    L.circle([51.508, -0.11], 500, {
+      color: 'red',
+      fillColor: '#f03',
+      fillOpacity: 0.5
+    }).addTo(map).bindPopup("I am a circle.");
+
+    L.polygon([
+      [51.509, -0.08],
+      [51.503, -0.06],
+      [51.51, -0.047]
+    ]).addTo(map).bindPopup("I am a polygon.");
+*/
+
+    var popup = L.popup();
+
+    function onMapClick(e) {
+      popup
+        .setLatLng(e.latlng)
+        .setContent("You clicked the map at " + e.latlng.toString())
+        .openOn(mapL);
+    }
+
+    mapL.on('click', onMapClick);
+
+  </script>
+
+ <script>
+/*var po = org.polymaps;
+
+var map = po.map()
+    .container(document.getElementById("mapPoly").appendChild(po.svg("svg")))
+    .add(po.interact())
+    .add(po.hash());
+
+map.add(po.image()
+    .url(po.url("http://{S}tile.cloudmade.com"
+    + "/1a1b06b230af4efdbb989ea99e9841af" // http://cloudmade.com/register
+    + "/998/256/{Z}/{X}/{Y}.png")
+    .hosts(["a.", "b.", "c.", ""])));
+
+map.add(po.compass()
+    .pan("none"));*/
+</script>
+
+<!--<script src="./data/dataPPRArray_Compressed.js"></script>
+<script>
+      eval(JXG.decompress(dataPPR_Compressed));
+      console.log(dataPPR[50000]);
+</script>!-->
+<script src="./data/dataPPRArray.js"></script>
+<script>
+      var o,n=0,index={};
+      for(var i=0;i<dataPPR.length;i++){
+        o=dataPPR[i];
+        if(o)
+          index[o["_id"]]=i;
+      }
+      console.log(index["2011_12918"]); //50000
+</script>
+<script src="./data/dataPPRId.js"> //may not need this if can summarise dynamically </script>
+<script>
+      function propertySalesData(data){
+        var r = {}; //result
+        r.data = {};
+        r.cache = {};
+        r.levels = ["Admin_Cty","ED","SA"]; //pass this in
+
+        r.fillLevel = function(level){
+          if(r.cache[level])
+            return r.cache[level];
+          else
+            return r.cache[level] = r.data.reduce(reduceByField(r.levels[level]),[]);
+        }
+
+        var x=0;
+        function reduceByField(field){
+          return function(res,e,i,a){
+            //console.log(e);
+            //console.log(res);
+            var f = e["Location"][field]; //need to know structure
+            if((++x%10000)===0)console.log(f);
+            if(f){
+              if(!res[f]){
+                res[f]=[];
+              }
+              res[f].push(e._id);
+            }
+            return res;
+          }
+        }
+
+        r.getData = function(level,key){ 
+          if(!r.cache[level])
+            r.cache[level]=r.fillLevel(level);
+        
+          if(!key)
+            return r.cache[level];
+
+          if(r.cache[level][key])
+            return r.cache[level][key];
+          else
+            return {};
+
+        }
+
+        r.stats = function(level,key){
+          return stats(r.getData(level,key).map(function(e,i,a){ return parseInt(e["Price_Gross"].replace(/[^\d\.\-]/g, "")); }));
+        }
+
+        function stats(a){
+          var res = { "count":0, "sum":0, "mean":0, "median":0, "min":0, "max":0, "var":0, "stdDev":0,
+                "decile1":0, "decile9":0, "quartile1":0, "quartile3":0 };
+          var n = a.length;
+          if(n>0){
+            a.sort;
+            res["count"]=n;
+            res["sum"]=a.reduce(function(r, e, i, a){ return r + e;});
+            res["mean"]=res["sum"]/res["count"];
+            res["median"]= nthPercentile(50);
+            res["min"]= a[0];
+            res["max"]= a[n-1];
+            res["var"]= Math.pow(a.reduce(function(r, e, i, a){ return e-res["mean"];}),2)/n;
+            res["stdDev"]= Math.sqrt(res["var"]);
+            res["decile1"]= nthPercentile(10);
+            res["decile9"]= nthPercentile(90);
+            res["quartile2"]= nthPercentile(25);
+            res["quartile3"]= nthPercentile(75);
+          }
+          return res;
+
+          function nthPercentile(nth){
+            var d = (100/nth);
+            var p = Math.floor(n/d);
+            if(n%d){
+              return a[p];
+            } else {
+              return (a[p-1]+a[p])/2.0;
+            }
+          }
+        }
+
+        function init(data){
+          r.data=data;
+          r.getData(0);
+          console.log("Completed property sales level 0");
+          return r;
+        }
+        return init(data);
+      }
+
+      var propertySales = propertySalesData(dataPPR); //wrong data set
+      console.log(propertySales);
+
+      /* Not used - kept because tree navigation could be used again
+      //Should I construct stats at this point?
+      //Level & key e.g. [0]{33: {sum}} - could add to properties of path? - this could be dynamic - 33 = path.id
+      function getDataForLevel(obj,depth,key){
+        //if key = null then all
+        //recursive flatten
+        var x = leafAggregate(obj);
+
+      }
+
+      function walkTree(key,path){ //not finished
+          var d=r.data;
+          if(path){
+            for(var i=0;i<path.length;i++){
+              d=d[path[i]]; //should walk down data
+            }
+            return r.cache[level][key] = leafAggregate(d[key]); //may not have key? - will return keys where no key - return multiple arrays? - useful to inflate
+          } else {
+          }
+      }
+
+      function leafAggregate(obj){
+        var result = [];
+        if(Object.prototype.toString.call(obj)==='[object Array]'){
+          return obj;
+        } else { //check object has keys? in case badly formed
+          for(k in obj){
+            result.concat(leaf(obj[k]));
+          }
+        }
+        return result;
+      }*/
+
+</script>

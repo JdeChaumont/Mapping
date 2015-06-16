@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+.background {
+  fill : none;
+  pointer-events: all;
+}
+
+.county {
+  fill: #ddd;
+}
+
+.county .active {
+  fill: orange;
+}
+
+.county-border {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.0px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.county-label {
+  fill: #000;
+  fill-opacity: 1.0;
+  font-size: 9px;
+  font-weight: 500;
+  text-anchor: middle;
+}
+
+
+.county.highlight {
+  fill: orange;
+}
+
+.subunit {
+  fill: orange;
+  stroke: #fff;
+  stroke-width: 1.0px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/*#subunit .active {
+  fill: orange;
+  pointer-events: none;
+}*/
+
+.subunit-border {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.0px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.subunit.highlight {
+  fill: #cdc;
+}
+
+text {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+</style>
+<body>
+  <div id="vis"></div>
+  <div id="subMap"></div>
+<script src="../lib/d3/d3.v3.min.js"></script>
+<script src="../lib/d3/topojson.v0.min.js"></script>
+<script src="./census/mapAdminCounties.json"></script>
+<script>
+
+var width = 800,
+    height = 900,
+    centered = null,
+    scale = 1200*9.5;
+
+var projection = d3.geo.albers()
+    .center([-3, 53.1])
+    .rotate([4.4, 0])
+    .parallels([52, 56])
+    .scale(scale)
+    .translate([width / 2, height / 2]);
+
+var path = d3.geo.path()
+    .projection(projection)
+    .pointRadius(2);
+
+var svg = d3.select("#vis").append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+svg.append("rect")
+    .attr("class","background")
+    .attr("width", width)
+    .attr("height", height)
+    .on("click",clicked);
+
+var g = svg.append("g");
+
+var counties;
+
+var irl = mapAdminCounties;
+counties = topojson.object(irl, irl.objects.IE).geometries;
+
+g.append("g")
+  .selectAll("path")
+    .data(counties)
+  .enter().append("path")
+    .attr("id",function(d) { return "CountyId" + d.properties.COUNTY;})
+    //.attr("class", function(d) { return "county " + d.id.replace(" County","");})
+    .attr("class", function(d) { return "county";})
+    .on("mouseover",highlight)
+    .on("mouseout",unhighlight)
+    .on("click",clicked)
+    .attr("d", path);    
+
+g.append("path")
+    .datum(topojson.mesh(irl, irl.objects.IE, function(a, b) { return a !== b; }))
+    .attr("d", path)
+    .attr("class", "county-border");
+
+g.selectAll(".county-label")
+      .data(counties)
+    .enter().append("text")
+      .attr("class", function(d) { return "county-label " + d.id; })
+      .attr("transform", function(d) { return "translate(" + path.centroid(d) + ")"; })
+      .attr("dy", ".35em")
+      .text(function(d) { return d.id.replace(" County",""); });
+
+function highlight(d){
+  var item = d3.select(this);
+  stateUpdate(item,"class","highlight",true);
+  return false;
+}
+
+function unhighlight(d){
+  var item = d3.select(this);
+  stateUpdate(item,"class","highlight",false);
+  return false;
+}
+
+function subunitHighlight(d){
+  var item = d3.select(this);
+  stateUpdate(item,"class","highlight",true);
+  return false;
+}
+
+function subunitUnhighlight(d){
+  var item = d3.select(this);
+  stateUpdate(item,"class","highlight",false);
+  return false;
+}
+
+//Helper functions - outside object
+function stateUpdate(items,attr,attrPartValue,add){
+  items.each(function(d,i) {
+    var item = d3.select(this);
+    attrUpdate(item,attr,attrPartValue,add);
+  }); 
+}
+
+function attrUpdate(item,attr,attrPartValue,add){
+  if(add)
+  {
+    item.attr(attr,function(d) { return (item.attr(attr) || "").trim() + " " + attrPartValue;})
+  } else {
+    item.attr(attr,function(d) { return item.attr(attr).replace(attrPartValue,"").trim();})
+  }
+}
+
+function selSubMap(d,k){
+
+  var selCounty = d.properties.COUNTY;
+  console.log("Click worked " + selCounty);
+
+  g.selectAll(".subunit")
+    .remove();
+  g.selectAll(".subunit-border")
+    .remove();
+
+  var cty = mapElectoralDistrictsbyCounty[selCounty];
+
+  g.append("g")
+    .selectAll("path")
+      .data(cty)
+    .enter().append("path")
+      .attr("id", function(d) { return d.EDNAME;})
+      .attr("class", function(d) { return "subunit " + d.EDNAME;})
+      .on("mouseover",subunitHighlight)
+      .on("mouseout",subunitUnhighlight)
+      .on("click",clicked)
+      .attr("d", path);    
+
+  g.append("path")
+      .datum(cty)
+      .attr("d", path)
+      .attr("class", "subunit-border");
+
+  g.selectAll(".subunit")
+    .style("stroke-width", 1.0 / k + "px");
+
+};
+
+
+function clicked(d){
+  var x,y,k;
+  console.log("fn clicked:");
+  console.log(d);
+
+  var bBox = d3.select(this)[0][0].getBBox();
+  //scale based on lesser of max fit for height or width
+  k = Math.min(width / (bBox.width * 1.1), height / (bBox.height * 1.1));
+  console.log(k);
+
+  //if(d && centered !== d && d.id !== d.properties.COUNTYNAME) {
+  if(!d || centered === d || d.id !== d.properties.COUNTYNAME) {
+    x = width/2;
+    y = height/2;
+    k = 1;
+    centered = null;
+    g.selectAll(".subunit")
+      .remove();
+    g.selectAll(".subunit-border")
+      .remove();
+  } else {
+    var centroid = path.centroid(d);
+    x = centroid[0];
+    y = centroid[1];
+    //k = 1; //this to change based on accessing the svg components dimensions
+    centered = d;
+    selSubMap(d,k);
+  }
+
+  //g.selectAll("path")
+  //  .classed("active",centered && function(d) {return d === centered;});
+
+  g.transition()
+    .duration(750)
+    .attr("transform","translate(" + width/2 + "," + height/2 + ")scale(" + k + ")translate("+-x+","+-y+")");
+    //.style("stroke-width", 1.0 / 8 + "px");
+
+};
+
+//Clicked2 uses projection rather than transform to centre and zoom
+function clicked2(d){
+  var k=4;
+
+  if(!d || centered === d || d.id !== d.properties.COUNTYNAME) {
+    projection.translate([width/2,height/2]).scale(scale);
+    centered = null; 
+    g.selectAll("#subunit")
+      .remove();
+    g.selectAll("#subunit-border")
+      .remove();
+
+  } else {
+    console.log(d);
+    var centroid = path.centroid(d),
+      translate = projection.translate();
+    if(centered!==null) k=1;
+    projection.translate([
+      (translate[0]-centroid[0])*k+width/2,
+      (translate[1]-centroid[1])*k+height/2
+    ]).scale(scale*4);
+    centered = d;
+    selSubMap(d);
+  }
+
+  g.selectAll(".county-label")
+    .remove();
+
+  g.selectAll("path").transition()
+    .duration(500)
+    .attr("d", path);
+
+  g.selectAll(".county-label")
+      .data(counties)
+    .enter().append("text")
+      .attr("class", function(d) { return "county-label " + d.id; })
+      .attr("transform", function(d) { return "translate(" + path.centroid(d) + ")"; })
+      .attr("dy", ".35em")
+      .text(function(d) { return d.id.replace(" County",""); });
+
+};
+
+</script>
+<script src="./census/mapElectoralDistrictsbyCounty.json"></script>
+<script src="./census/mapSmallAreasByED.json"></script>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+.subunit.NIR { fill: #cdc; }
+.subunit.IRL { fill: #ddd; } 
+.subunit { fill: #ddd; } 
+.subunitHighlight { fill: #cdc; } 
+
+.subunit-boundary {
+  fill: none;
+  stroke: #fff;
+  /*stroke-dasharray: 2,2;*/
+  stroke-linejoin: round;
+}
+
+.subunit-label {
+  fill: #000;
+  fill-opacity: 1.0;
+  font-size: 9px;
+  font-weight: 500;
+  text-anchor: middle;
+}
+
+.place,
+.place-label {
+  fill: #444;
+}
+
+text {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+</style>
+<body>
+  <div id="vis"></div>
+  <div id="subMap"></div>
+<script src="../scripts/d3/d3.v3.min.js"></script>
+<script src="../scripts/d3/topojson.v0.min.js"></script>
+<script>
+
+var width = 700,
+    height = 800,
+    centered;
+
+var projection = d3.geo.albers()
+    .center([-3, 53.1])
+    .rotate([4.4, 0])
+    .parallels([52, 56])
+    .scale(1200 * 8)
+    .translate([width / 2, height / 2]);
+
+var path = d3.geo.path()
+    .projection(projection)
+    .pointRadius(2);
+
+var svg = d3.select("#vis").append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+d3.json("census_2011_counties_simplified.json", function(error, irl) { 
+  var subunits = topojson.object(irl, irl.objects.IE);
+
+  svg.selectAll(".subunit")
+      .data(subunits.geometries)
+    .enter().append("path")
+      .attr("class", function(d) { return "subunit " + d.id;})//.replace(" County",""); })
+      .on("mouseover",highlight)
+      .on("mouseout",unhighlight)
+      .on("click",clicked)
+      .attr("d", path);
+
+  svg.append("path")
+      .datum(topojson.mesh(irl, irl.objects.IE, function(a, b) { return a !== b; }))
+      .attr("d", path)
+      .attr("class", "subunit-boundary");
+  
+  svg.selectAll(".subunit-label")
+      .data(subunits.geometries)
+    .enter().append("text")
+      //.attr("class", function(d) { return "subunit-label " + d.properties.COUNTYNAME; })
+      .attr("class", function(d) { return "subunit-label " + d.id; })
+      .attr("transform", function(d) { return "translate(" + path.centroid(d) + ")"; })
+      .attr("dy", ".35em")
+      //.text(function(d) { return "Pop " + d.properties.Total2011; });
+      .text(function(d) { return d.id.replace(" County",""); });
+
+  /*svg.append("path")
+      .datum(places)
+      .attr("d", path)
+      .attr("class", "place");*/
+/*
+  svg.selectAll(".place-label")
+      .data(places.geometries)
+    .enter().append("text")
+      .attr("class", "place-label")
+      .attr("transform", function(d) { return "translate(" + projection(d.coordinates) + ")"; })
+      .attr("x", function(d) { return d.coordinates[0] > -1 ? 6 : -6; })
+      .attr("dy", ".35em")
+      .style("text-anchor", function(d) { return d.coordinates[0] > -1 ? "start" : "end"; })
+      .text(function(d) { return d.properties.name; });*/
+});
+
+function highlight(){
+  var item = d3.select(this);
+  item.attr("class", function(d) { return "subunitHighlight"; });
+}
+
+function unhighlight(){
+  var item = d3.select(this);
+  item.attr("class", function(d) { return "subunit"; });
+}
+
+function selSubMap(){
+  var item = d3.select(this);  
+  console.log("Click worked " + item);
+  var selCounty = "Mayo"; //this.County;
+  console.log("Click worked " + selCounty);
+  
+  var svg = d3.select("#subMap").append("svg")
+      .attr("width", width)
+      .attr("height", height);
+  console.log("Check 1"+"./Maps/"+selCounty+".topojson");
+  d3.json("./Maps/"+selCounty+".topojson", function(error, county) { 
+    var cty = topojson.object(county, county.objects[selCounty]);
+    console.log("Check 2");
+    svg.selectAll(".subunit")
+        .data(cty.geometries)
+      .enter().append("path")
+        .attr("class", function(d) { return "subunit"; }) // + d.properties.COUNTYNAME; })
+        .on("mouseover",highlight)
+        .on("mouseout",unhighlight)
+        .attr("d", path);
+    console.log("Check 3");
+    svg.append("path")
+        .datum(topojson.mesh(county, county.objects[selCounty], function(a, b) { return a !== b; }))
+        .attr("d", path)
+        .attr("class", "subunit-boundary");
+    console.log("Check 4");
+  });
+};
+
+function clicked(d){
+  var x,y,k;
+
+  if(d && centered !== d) {
+    var centroid = path.centroid(d);
+    x = centroid[0];
+    y = centroid[1];
+    k = 4; //this to change based on accessing the svg components dimensions
+    centered = d;
+  } else {
+    x = width/2;
+    y = height/2;
+    k = 1;
+    centered = null;
+  }
+
+  svg.selectAll("path")
+    .classed("active",centered && function(d) {return d === centered;});
+
+  svg.transition()
+    .duration(750)
+    .attr("transform","translate(" + width/2 + "," + height/2 + ")scale(" + k + ")translate")
+    .style("stroke-width", 1.5 / k + "px");
+
+};
+
+
+
+</script>

@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<link href="../lib/leaflet/leaflet.css" rel="stylesheet" type="text/css">
+<style>
+
+.background {
+  fill : none;
+  pointer-events: all;
+}
+
+.county {
+  fill: #ddd;
+}
+
+.county .active {
+  fill: orange;
+}
+
+.county-border {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.0px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.county-label {
+  fill: #000;
+  fill-opacity: 1.0;
+  font-size: 9px;
+  font-weight: 500;
+  text-anchor: middle;
+}
+
+
+.county.highlight {
+  fill: orange;
+}
+
+.subunit {
+  fill: orange;
+  stroke: #fff;
+  stroke-width: 1.0px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/*#subunit .active {
+  fill: orange;
+  pointer-events: none;
+}*/
+
+.subunit-border {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.0px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.subunit.highlight {
+  fill: #cdc;
+}
+
+text {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 11px;
+  pointer-events: none;
+}
+
+</style>
+<body>
+  <div id="vis"></div>
+  <div id="subMap"></div>
+  <div id="map" style="width: 700px; height: 900px"></div>
+  <div id="mapPoly" style="width: 600px; height: 400px"></div>
+<script src="../lib/base64compress/jsxcompressor.min.js"></script>
+<script src="../lib/d3/d3.v3.min.js"></script>
+<script src="../lib/d3/topojson.v0.min.js"></script>
+<script src="../lib/jquery/jquery-1.10.2.js"></script>
+<script src="./census/mapAdminCounties.json"></script>
+<script src="../lib/leaflet/leaflet.js"></script>
+<script src="../lib/polymaps/polymaps.js"></script>
+
+<script>
+  function fireEvent(name, target) {
+    //Ready: create a generic event
+    var evt = document.createEvent("Events")
+    //Aim: initialize it to be the event we want
+    evt.initEvent(name, true, true); //true for can bubble, true for cancelable
+    //FIRE!
+    target.dispatchEvent(evt);
+  }
+  function foobar(e){
+      console.log("foobar called");
+      console.log(this);
+  }
+
+  function testEvents() {
+      window.addEventListener("doubleClick", foobar, false); //false to get it in bubble not capture.
+  }
+
+  function singleClick(e) {
+      fireEvent("singleClick", document);
+      console.log("singleClick fired");
+      console.log(this);
+  }
+
+  function doubleClick(e) {
+      fireEvent("doubleClick", document);
+      console.log("doubleClick fired");
+      console.log(this);
+  }
+
+  function s(e){
+    console.log("single fired");
+    clicked.call(this,e);
+  }
+
+  function d(e){
+    console.log("double fired");
+    doubleClicked.call(this,e);
+  }
+
+  //This works
+  function clickParse(single,double){
+    return function(e){
+      var that = this;
+      var dblclick = parseInt($(that).data('double'), 10) || 0;
+      $(that).data('double', ++dblclick);
+      if(dblclick>1){
+        double.call(that,e);
+      } else {
+          setTimeout(function() {
+            if (parseInt( $(that).data('double'), 10) < 2) {
+                single.call(that,e);
+            }
+            $(that).data('double', 0);
+          }, 300);
+      }
+    }
+  }
+
+  /*
+  document.body.onclick = function (e) {
+      var isRightMB;
+      e = e || window.event;
+
+      if ("which" in e)  // Gecko (Firefox), WebKit (Safari/Chrome) & Opera
+          isRightMB = e.which == 3; 
+      else if ("button" in e)  // IE, Opera 
+          isRightMB = e.button == 2; 
+
+      alert("Right mouse button " + (isRightMB ? "was not " : "") + "clicked!");
+  } */
+
+</script>
+
+
+<script>
+
+  //*******************************************************************************
+  //Module Template - not used just a template
+  //*******************************************************************************
+  function moduleTemplate(o){
+    var ret = {};
+
+    var defaults = {
+      
+    }
+
+    ret.init = function(options){
+        
+        // Extend defaults
+        var extended = defaults;
+        for (var prop in options) {
+          if (options.hasOwnProperty(prop)) {
+            extended[prop] = options[prop];
+          }
+        }
+        var o = ret.options = extended; //var o used for shorthand
+
+      return ret;
+    }
+
+    ret.update = function(){
+      
+    }
+
+    return ret.init(o);
+  }
+
+  //*******************************************************************************
+  //Module Template - not used just a template
+  //*******************************************************************************
+  function regionalMap(o){
+    var ret = {};
+
+    var defaults = {
+      
+    }
+
+    ret.init = function(options){
+        
+        // Extend defaults
+        var extended = defaults;
+        for (var prop in options) {
+          if (options.hasOwnProperty(prop)) {
+            extended[prop] = options[prop];
+          }
+        }
+        var o = ret.options = extended; //var o used for shorthand
+
+      return ret;
+    }
+
+    ret.update = function(){
+      
+    }
+
+    return ret.init(o);
+  }
+
+  var mapOptions = { 
+    container : "map", //container should determine width
+    eventHandlers : { //should be at each level?
+      '.cell' : { click : cellClicked }, 
+      'tr' : { mouseover : highlight, mouseout : unhighlight } 
+    }
+    levels : [
+      { description : "adminCounties", source : mapAdminCounties, id : "properties|COUNTY"  },
+      { description : "electoralDistricts", source : mapElectoralDistrictsbyCounty, id : "EDNAME" }, //each level needs selector from previous level
+      { description : "smallAreas", source : mapSmallAreasByED, id : "SMALL_AREA" }
+    ]
+  }
+
+  var map=regionalMap(mapOptions);
+  //Send in a projection
+  //Send in id's
+  //Send
+
+
+var width = 700,
+    height = 900,
+    centered = null,
+    scale = 1200*9.5; 
+    //scale = (1 << 8 + 7) / 2 / Math.PI; //(1 << 8 + Map.zoom) / 2 / Math.PI
+
+var projection = d3.geo.albers()
+    .center([-3, 53.1])
+    .rotate([4.4, 0])
+    .parallels([52, 56])
+    .scale(scale)
+    .translate([width / 2, height / 2]);
+
+/*var projection = d3.geo.mercator()
+    .center([-7.4, 53.1])
+    .scale(scale)
+    .translate([width / 2, height / 2]);*/
+
+var path = d3.geo.path()
+    .projection(projection)
+    .pointRadius(2);
+
+var svg = d3.select("#vis").append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+svg.append("rect")
+    .attr("class","background")
+    .attr("width", width)
+    .attr("height", height)
+    .on("click",clicked);
+
+var g = svg.append("g");
+
+var counties;
+
+//d3.json("census_2011_counties.json", function(error, irl) { 
+  var irl = mapAdminCounties;
+  counties = topojson.object(irl, irl.objects.IE).geometries;
+
+  g.append("g")
+    .selectAll("path")
+      .data(counties)
+    .enter().append("path")
+      .attr("id",function(d) { return "CountyId" + d.properties.COUNTY;})
+      //.attr("class", function(d) { return "county " + d.id.replace(" County","");})
+      .attr("class", function(d) { return "county";})
+      .on("mouseover",highlight)
+      .on("mouseout",unhighlight)
+      //.on("click",clickParse(s,d))
+      .on("click",clicked)
+      .attr("d", path);
+
+  g.append("path")
+      .datum(topojson.mesh(irl, irl.objects.IE, function(a, b) { return a !== b; }))
+      .attr("d", path)
+      .attr("class", "county-border");
+
+  g.selectAll(".county-label")
+        .data(counties)
+      .enter().append("text")
+        .attr("class", function(d) { return "county-label " + d.id; })
+        .attr("transform", function(d) { return "translate(" + path.centroid(d) + ")"; })
+        .attr("dy", ".35em")
+        .text(function(d) { return d.id.replace(" County",""); });
+
+  /*svg.append("path")
+      .datum(places)
+      .attr("d", path)
+      .attr("class", "place");*/
+/*
+  svg.selectAll(".place-label")
+      .data(places.geometries)
+    .enter().append("text")
+      .attr("class", "place-label")
+      .attr("transform", function(d) { return "translate(" + projection(d.coordinates) + ")"; })
+      .attr("x", function(d) { return d.coordinates[0] > -1 ? 6 : -6; })
+      .attr("dy", ".35em")
+      .style("text-anchor", function(d) { return d.coordinates[0] > -1 ? "start" : "end"; })
+      .text(function(d) { return d.properties.name; });*/
+//});
+
+function highlight(d){
+  var item = d3.select(this);
+  stateUpdate(item,"class","highlight",true);
+  return false;
+}
+
+function unhighlight(d){
+  var item = d3.select(this);
+  stateUpdate(item,"class","highlight",false);
+  return false;
+}
+
+function subunitHighlight(d){
+  var item = d3.select(this);
+  stateUpdate(item,"class","highlight",true);
+  return false;
+}
+
+function subunitUnhighlight(d){
+  var item = d3.select(this);
+  stateUpdate(item,"class","highlight",false);
+  return false;
+}
+
+//Helper functions - outside object
+function stateUpdate(items,attr,attrPartValue,add){
+  items.each(function(d,i) {
+    var item = d3.select(this);
+    attrUpdate(item,attr,attrPartValue,add);
+  }); 
+}
+
+function attrUpdate(item,attr,attrPartValue,add){
+  if(add)
+  {
+    item.attr(attr,function(d) { return (item.attr(attr) || "").trim() + " " + attrPartValue;})
+  } else {
+    item.attr(attr,function(d) { return item.attr(attr).replace(attrPartValue,"").trim();})
+  }
+}
+
+function selSubMap(d,k){
+
+  //var selCounty = d.id.replace(" County","");
+  //var selCounty = d.id.replace("CountyId","");
+  var selCounty = d.properties.COUNTY;
+  console.log("Click worked " + selCounty);
+
+  g.selectAll(".subunit")
+    .remove();
+  g.selectAll(".subunit-border")
+    .remove();
+
+  //d3.json("./Maps/"+selCounty+".topojson", function(error, county) { 
+  //  var cty = topojson.object(county, county.objects[selCounty]);
+    var cty = mapElectoralDistrictsbyCounty[selCounty];
+    //console.log(cty);
+    //  console.log("Check 2");
+    
+/*    g.selectAll("#subunit")
+        .data(cty.geometries)
+      .enter().append("path")
+        .attr("id", function(d) { return "subunit"; }) // + d.properties.COUNTYNAME; })
+        .on("mouseover",subunitHighlight)
+        .on("mouseout",subunitUnhighlight)
+        .on("click",clicked)
+        .attr("d", path);*/
+    g.append("g")
+      .selectAll("path")
+        .data(cty)
+      .enter().append("path")
+        .attr("id", function(d) { return d.EDNAME;})
+        .attr("class", function(d) { return "subunit " + d.EDNAME;})
+        .on("mouseover",subunitHighlight)
+        .on("mouseout",subunitUnhighlight)
+        .on("click",clickedED)
+        .attr("d", path);    
+
+    console.log("Check 3");
+    
+    g.append("path")
+        //.datum(topojson.mesh(county, county.objects[selCounty], function(a, b) { return a !== b; }))
+        .datum(cty)
+        //.datum(topojson.mesh(cty, cty, function(a, b) { return a !== b; }))
+        .attr("d", path)
+        .attr("class", "subunit-border");
+
+    g.selectAll(".subunit")
+      .style("stroke-width", 1.0 / k + "px");
+
+    console.log("Check 4");
+  //});
+};
+
+function selSubMap2(d,k){
+
+  var selED = d.properties.CSOED;
+  console.log("Click worked " + selED);
+
+  g.selectAll(".subunit")
+    .remove();
+  g.selectAll(".subunit-border")
+    .remove();
+
+    var cty = mapSmallAreasByED[selED];
+
+    g.append("g")
+      .selectAll("path")
+        .data(cty)
+      .enter().append("path")
+        .attr("id", function(d) { return d.SMALL_AREA;})
+        .attr("class", function(d) { return "subunit " + d.SMALL_AREA;})
+        .on("mouseover",subunitHighlight)
+        .on("mouseout",subunitUnhighlight)
+        .on("click",clicked)
+        .attr("d", path);    
+
+    console.log("Check 3");
+    
+    g.append("path")
+        .datum(cty)
+        .attr("d", path)
+        .attr("class", "subunit-border");
+
+    g.selectAll(".subunit")
+      .style("stroke-width", 1.0 / k + "px");
+
+    console.log("Check 4");
+};
+
+function doubleClicked(d){
+  var x,y,k;
+  console.log("fn dblclicked:");
+  console.log(d);
+
+  var bBox = d3.select(this)[0][0].getBBox();
+  //scale based on lesser of max fit for height or width
+  k = Math.min(width / (bBox.width * 1.1), height / (bBox.height * 1.1));
+  console.log(k);
+
+  //if(d && centered !== d && d.id !== d.properties.COUNTYNAME) {
+  if(!d || centered === d || d.id !== d.properties.COUNTYNAME) {
+    x = width/2;
+    y = height/2;
+    k = 1;
+    centered = null;
+    g.selectAll(".subunit")
+      .remove();
+    g.selectAll(".subunit-border")
+      .remove();
+  } else {
+    console.log(d3.mouse(this));
+    console.log(projection.invert(d3.mouse(this)));
+    console.log(projection.invert([0,0]));
+    var centroid = path.centroid(d);
+    x = centroid[0];
+    y = centroid[1];
+    //k = 1; //this to change based on accessing the svg components dimensions
+    centered = d;
+    selSubMap(d,k);
+  }
+
+  //g.selectAll("path")
+  //  .classed("active",centered && function(d) {return d === centered;});
+
+  g.transition()
+    .duration(750)
+    .attr("transform","translate(" + width/2 + "," + height/2 + ")scale(" + k + ")translate("+-x+","+-y+")");
+    //.style("stroke-width", 1.0 / 8 + "px");
+}
+
+function clickedNew(selSubMap,pathId){
+  return function(d){
+  var x,y,k;
+
+  var bBox = d3.select(this)[0][0].getBBox();
+  //scale based on lesser of max fit for height or width
+  k = Math.min(width / (bBox.width * 1.1), height / (bBox.height * 1.1));
+
+  if(!d || centered === d || d.id !== pathId) { //specific to county
+    x = width/2;
+    y = height/2;
+    k = 1;
+    centered = null;
+    g.selectAll(".subunit")
+      .remove();
+    g.selectAll(".subunit-border")
+      .remove();
+  } else {
+    console.log(d3.mouse(this));
+    console.log(projection.invert(d3.mouse(this)));
+    console.log(projection.invert([0,0]));
+    var centroid = path.centroid(d);
+    x = centroid[0];
+    y = centroid[1];
+    //k = 1; //this to change based on accessing the svg components dimensions
+    centered = d;
+    selSubMap(d,k);
+  }
+
+  g.transition()
+    .duration(750)
+    .attr("transform","translate(" + width/2 + "," + height/2 + ")scale(" + k + ")translate("+-x+","+-y+")");
+  }
+}
+
+
+function clicked(d){
+  var x,y,k;
+  console.log("fn clicked:");
+  console.log(d);
+
+  var bBox = d3.select(this)[0][0].getBBox();
+  //scale based on lesser of max fit for height or width
+  k = Math.min(width / (bBox.width * 1.1), height / (bBox.height * 1.1));
+  console.log(k);
+
+  //if(d && centered !== d && d.id !== d.properties.COUNTYNAME) {
+  if(!d || centered === d || d.id !== d.properties.COUNTYNAME) {
+    x = width/2;
+    y = height/2;
+    k = 1;
+    centered = null;
+    g.selectAll(".subunit")
+      .remove();
+    g.selectAll(".subunit-border")
+      .remove();
+  } else {
+    console.log(d3.mouse(this));
+    console.log(projection.invert(d3.mouse(this)));
+    console.log(projection.invert([0,0]));
+    var centroid = path.centroid(d);
+    x = centroid[0];
+    y = centroid[1];
+    //k = 1; //this to change based on accessing the svg components dimensions
+    centered = d;
+    selSubMap(d,k);
+  }
+
+  //g.selectAll("path")
+  //  .classed("active",centered && function(d) {return d === centered;});
+
+  g.transition()
+    .duration(750)
+    .attr("transform","translate(" + width/2 + "," + height/2 + ")scale(" + k + ")translate("+-x+","+-y+")");
+    //.style("stroke-width", 1.0 / 8 + "px");
+
+};
+
+function clickedED(d){
+  var x,y,k;
+  console.log("fn clicked:");
+  console.log(d);
+
+  var bBox = d3.select(this)[0][0].getBBox();
+  //scale based on lesser of max fit for height or width
+  k = Math.min(width / (bBox.width * 1.1), height / (bBox.height * 1.1));
+  console.log(k);
+
+  var centroid = path.centroid(d);
+  x = centroid[0];
+  y = centroid[1];
+  //k = 1; //this to change based on accessing the svg components dimensions
+  centered = d;
+  console.log(d3.mouse(this));
+  console.log(projection.invert(d3.mouse(this)));
+  console.log(projection.invert([0,0]));
+  selSubMap2(d,k);
+
+  //g.selectAll("path")
+  //  .classed("active",centered && function(d) {return d === centered;});
+
+  g.transition()
+    .duration(750)
+    .attr("transform","translate(" + width/2 + "," + height/2 + ")scale(" + k + ")translate("+-x+","+-y+")");
+    //.style("stroke-width", 1.0 / 8 + "px");
+
+};
+
+//Clicked2 uses projection rather than transform to centre and zoom
+function clicked2(d){
+  var k=4;
+
+  if(!d || centered === d || d.id !== d.properties.COUNTYNAME) {
+    projection.translate([width/2,height/2]).scale(scale);
+    centered = null; 
+    g.selectAll("#subunit")
+      .remove();
+    g.selectAll("#subunit-border")
+      .remove();
+
+  } else {
+    console.log(d);
+    var centroid = path.centroid(d),
+      translate = projection.translate();
+    if(centered!==null) k=1;
+    projection.translate([
+      (translate[0]-centroid[0])*k+width/2,
+      (translate[1]-centroid[1])*k+height/2
+    ]).scale(scale*4);
+    centered = d;
+    selSubMap(d);
+  }
+
+  g.selectAll(".county-label")
+    .remove();
+
+  g.selectAll("path").transition()
+    .duration(500)
+    .attr("d", path);
+
+  g.selectAll(".county-label")
+      .data(counties)
+    .enter().append("text")
+      .attr("class", function(d) { return "county-label " + d.id; })
+      .attr("transform", function(d) { return "translate(" + path.centroid(d) + ")"; })
+      .attr("dy", ".35em")
+      .text(function(d) { return d.id.replace(" County",""); });
+
+};
+
+</script>
+
+  <script>
+
+    var NW = projection.invert([350,450]);
+    console.log(NW);
+    var mp={};
+    mp.centre=[NW[1], NW[0]];
+    //mp.centre=[53.1, -3];
+    mp.zoom=7;
+
+    //var map = L.map('map').setView([51.505, -0.09], 13);
+    var map = L.map('map').setView(mp.centre, mp.zoom);
+
+    L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
+      maxZoom: 18//,
+      //attribution: 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="http://cloudmade.com">CloudMade</a>'
+    }).addTo(map);
+
+/*
+    L.marker([51.5, -0.09]).addTo(map)
+      .bindPopup("<b>Hello world!</b><br />I am a popup.").openPopup();
+
+    L.circle([51.508, -0.11], 500, {
+      color: 'red',
+      fillColor: '#f03',
+      fillOpacity: 0.5
+    }).addTo(map).bindPopup("I am a circle.");
+
+    L.polygon([
+      [51.509, -0.08],
+      [51.503, -0.06],
+      [51.51, -0.047]
+    ]).addTo(map).bindPopup("I am a polygon.");
+*/
+
+    var popup = L.popup();
+
+    function onMapClick(e) {
+      popup
+        .setLatLng(e.latlng)
+        .setContent("You clicked the map at " + e.latlng.toString())
+        .openOn(map);
+    }
+
+    map.on('click', onMapClick);
+
+  </script>
+
+ <script>
+/*var po = org.polymaps;
+
+var map = po.map()
+    .container(document.getElementById("mapPoly").appendChild(po.svg("svg")))
+    .add(po.interact())
+    .add(po.hash());
+
+map.add(po.image()
+    .url(po.url("http://{S}tile.cloudmade.com"
+    + "/1a1b06b230af4efdbb989ea99e9841af" // http://cloudmade.com/register
+    + "/998/256/{Z}/{X}/{Y}.png")
+    .hosts(["a.", "b.", "c.", ""])));
+
+map.add(po.compass()
+    .pan("none"));*/
+</script>
+
+<script src="./census/mapElectoralDistrictsbyCounty.json"></script>
+<script src="./census/mapSmallAreasByED.json"></script>
+<!--<script src="./data/dataPPRArray_Compressed.js"></script>
+<script>
+      eval(JXG.decompress(dataPPR_Compressed));
+      console.log(dataPPR[50000]);
+</script>!-->
+<script src="./data/dataPPRArray.js"></script>
+<script>
+      var o,n=0,index={};
+      for(var i=0;i<dataPPR.length;i++){
+        o=dataPPR[i];
+        if(o)
+          index[o["_id"]]=i;
+      }
+      console.log(index["2011_12918"]); //50000
+</script>
+<script src="./data/dataPPRId.js"></script>
